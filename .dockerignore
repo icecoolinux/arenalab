@@ -1,0 +1,26 @@
+# Exclude workspace directory - it should only be mounted at runtime
+workspace/
+
+# Exclude development files
+.git/
+.gitignore
+*.md
+local_notes.txt
+plugins/
+
+# Exclude Next.js build artifacts and dependencies (will be built inside container)
+app/frontend/.next/
+app/frontend/out/
+app/frontend/node_modules/
+
+# Exclude Python cache
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+
+# Exclude IDE files
+.vscode/
+.idea/
+
+# Exclude test files
+test_*.py

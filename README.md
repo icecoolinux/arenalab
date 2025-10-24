@@ -1,2 +1,224 @@
-# arenalab
-Web platform to configure, run, and manage ML-Agents experiments with history, cloning, TensorBoard visualization, and result annotations.
+# ArenaLab - A Web Platform for ML-Agents Experiments
+ArenaLab is a **web platform with an intuitive interface** for managing Unity ML-Agents experiments.
+You can configure, launch, and monitor your training sessions directly from your browser — without manually editing YAML files, hyperparameters, or command-line flags.
+
+Built with **FastAPI** on the backend and **React.js** on the frontend, ArenaLab offers a clean and efficient workflow for experiment management.
+The project was developed with the assistance of **Claude Code**, used to accelerate both backend and frontend development.
+
+### Main Features
+
+* **Web Interface** – Configure YAML files and training parameters easily from your browser.
+
+* **GPU Execution** – Launch and monitor training sessions on GPU with one click.
+
+* **Experiment Versioning** – Organized in a three-level structure: **Experiment → Revision → Run**.
+
+   * Each revision is immutable for full reproducibility.
+
+   * Promote successful runs to new revisions.
+
+* **Run History** – Browse all your experiments, revisions, and runs in one place.
+
+* **Clone & Update** – Re-run any experiment with modified parameters.
+
+* **Live Monitoring** – Follow progress in real time through TensorBoard and live log streaming.
+
+* **Notes & Results** – Add descriptions, outcomes, and observations to each run.
+
+* **Environment Management** – Version and organize Unity builds.
+
+* **Dockerized Setup** – Runs fully inside a ready-to-use Docker container with persistent storage in `/workspace`.
+
+* **Plugin System (available in next version)** – Designed to allow custom extensions and pre-built plugins like:
+
+   * Population-Based Training (PBT)
+
+   * Hyperparameter sweepers
+
+   * Agents
+
+   * Auto-analyzers and performance monitors
+
+   * Etc.
+
+## Documentation
+
+- [**Architecture Guide**](docs/ARCHITECTURE.md)
+- [**Plugin Development**](docs/PLUGINS_DEVELOPMENT.md)  
+- [**Contributing Guide**](docs/CONTRIBUTING.md)
+
+### Approach
+
+A three-level hierarchy to organize your ML experiments:
+
+**1. 📁 Experiment** (concept/project)
+   * Only identity and purpose: name, description, tags
+   * Does not store "live" YAML or binaries
+
+**2. 📌 Revision** (immutable)
+   * Freezes a "version" of the setup:
+     * yaml config
+     * cli flags
+     * environment (versioned Unity build)
+   * **Immutable**: if you change YAML/flags/build → new revision (v2, v3…)
+   * **Advantages**: reproducible and auditable; clear milestones to compare revisions
+
+**3. 🚀 Run** (execution)
+   * Always saves complete snapshot (copies) of:
+     * yaml config
+     * cli flags
+   * Points to a revision and also allows quick overrides (ad-hoc tweaks)
+   * You can **"promote"** a run to a new revision if you like the tweak
+
+### When to Use Each Level
+
+**Create new revision when:**
+   * Unity build changes
+   * Substantial YAML/architecture changes
+   * You want a "presentable" milestone (v2 with improvements)
+
+**Make overrides in Run when:**
+   * Testing minor hyperparams (LR, entropy, batch size)
+   * Adjustments to --time-scale, seeds, steps, etc.
+
+**Promote to revision:**
+   * From the run that "worked well": Promote to new revision
+
+
+### Advanced Algorithms (Next Version)
+
+**Population-Based Training (PBT)**
+
+   * A PBTPopulation links to an existing Experiment and Revision
+
+   * Each population member represents a Run with specific parameter overrides
+
+   * During the exploit/explore phase, new child runs are automatically created
+
+   * When a configuration converges, the best-performing run is promoted to a new revision (vN+1)
+
+**Auto-Tuner**
+
+   * Automatic hyperparameter optimization across multiple runs
+
+   * Will support both grid search and adaptive strategies
+
+
+## Usage guides
+
+All dynamic data is stored in `/workspace`.
+(If you’re running on RunPod, make sure to use a persistent volume).
+
+You can use ArenaLab in five different ways:
+
+### 1. Runpod Ready (easiest way)
+
+1. Go and deploy a [RunPod ArenaLab Template](https://console.runpod.io/deploy?template=ggztcggd7u&ref=00u33oye), please mount a persistent volume on `/workspace`.
+2. Running the pod for the first time will initialize the structure in `/workspace`.
+3. Edit the configuration file `/workspace/config/secrets.env` on the permanent disk, you must uncomment and define admin credentials:
+```bash
+JWT_SECRET=put_something_random_and_long
+#ADMIN_EMAIL=admin@example.com
+#ADMIN_PASSWORD=changeme
+MONGODB_URI=mongodb://localhost:27017
+MONGO_DB=mlagents_lab
+#OPENAI_API_KEY=...
+```
+4. Restart the pod
+5. Open the Web HTTP Service on port 3000.
+6. Done!
+
+### 2. Docker Production from DockerHUB (easiest local way)
+
+1. Pull the image from DockerHUB
+```bash
+docker pull icecoolinux/arenalab:latest
+```
+
+2. Run production container
+```bash
+docker run --gpus all \
+  -p 3000:3000 \
+  -v $(pwd)/workspace:/workspace \
+  --name arenalab icecoolinux/arenalab:latest
+```
+
+### 3. Docker Production Setup
+
+1. Clone this repository
+
+2. Build production image
+```bash
+docker build --target prod -t arenalab:prod -f app/docker/Dockerfile .
+```
+
+3. Run production container
+```bash
+docker run --gpus all \
+  -p 3000:3000 \
+  -v $(pwd)/workspace:/workspace \
+  --name arenalab-prod arenalab:prod
+```
+
+**Access:** http://localhost:3000
+
+### 4. Docker Development Setup
+**[Docker Development Setup](docs/CONTRIBUTING.md#docker-development-setup)**
+
+### 5. Local development
+**[Local development](docs/CONTRIBUTING.md#local-development)**
+
+## Examples
+
+ArenaLab includes a ready-to-use **Soccer Twos** example in `examples/soccer_twos/` - a 2v2 multi-agent soccer environment where four agents compete in teams to score goals. The example includes a pre-configured YAML with POCA trainer and self-play settings, plus the Unity environment build. See the [official ML-Agents documentation](https://unity-technologies.github.io/ml-agents/Learning-Environment-Examples/#soccer-twos) for more details about the environment.
+
+## Contributing
+
+We welcome contributions! ArenaLab is designed to be **community-friendly**:
+
+- 📖 **[Contributing Guide](docs/CONTRIBUTING.md)** - Get started contributing
+- 🏗️ **[Architecture Docs](docs/ARCHITECTURE.md)** - Understand the system design  
+- 💻 **[Development Setup](docs/CONTRIBUTING.md#local-development)** - Install and run the development environment  
+- 🔧 **[Plugin Development](docs/PLUGINS_DEVELOPMENT.md)** - Create custom plugins
+
+
+## Testing & Quality
+
+ArenaLab has a testing infrastructure with minimal current coverage:
+
+- **Testing Framework**: Full pytest setup with fixtures, mocking, and async support
+- **Current Tests**: Auth, YAML tools, runs service, experiments service, plugins (~60 tests)
+- **Test Categories**: Unit, integration, and plugin tests with proper markers
+- **Coverage Reporting**: Configured for HTML, XML, and terminal output
+
+```bash
+# Run different test types
+python app/backend/run_tests.py                  # All tests with coverage report
+python app/backend/run_tests.py --unit           # Fast unit tests only (~42 tests)
+python app/backend/run_tests.py --integration    # API integration tests only
+```
+
+## Technical aspects
+
+### First Container Startup
+* On the first run, the backend automatically creates an admin user if no users exist and both `ADMIN_EMAIL` and `ADMIN_PASSWORD` are defined in secrets.env.
+
+* It also initializes the required directory structure inside `/workspace`.
+
+### Workspace Structure
+The `/workspace` directory should be mounted on a **persistent volume** to ensure data is not lost between sessions.
+
+* `/workspace/mongo` – MongoDB data.
+
+* `/workspace/config/secrets.env` – Credentials and sensitive configuration (not committed to version control).
+
+* `/workspace/envs` – Environment builds, typically versioned Unity executables (`.x86_64`).
+
+* `/workspace/experiments/<exp_id>/revisions/<rev_id>/config.yaml` – Configuration file for a revision.
+
+* `/workspace/experiments/<exp_id>/revisions/<rev_id>/runs/<run_id>/{config.yaml|stdout.log}` – Run-specific configuration and log output.
+
+* `/workspace/experiments/<exp_id>/revisions/<rev_id>/runs/<run_id>/results/` – TensorBoard event files for each run.
+
+
+

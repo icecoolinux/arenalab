@@ -1,0 +1,20 @@
+fastapi
+uvicorn[standard]
+pymongo
+python-dotenv
+passlib[argon2]
+python-jose[cryptography]
+pydantic
+psutil
+tensorboard
+pyyaml
+python-multipart
+ruamel.yaml
+
+# Testing dependencies
+pytest
+pytest-asyncio
+pytest-mock
+pytest-cov
+httpx
+mongomock
