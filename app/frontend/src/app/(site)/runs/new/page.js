@@ -32,6 +32,7 @@ function NewRunForm() {
   const [plugins, setPlugins] = useState([]);
   const [selectedPlugins, setSelectedPlugins] = useState([]);
   const [pluginSettings, setPluginSettings] = useState({});
+  const [preserveCliFlags, setPreserveCliFlags] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -96,14 +97,15 @@ function NewRunForm() {
     try {
       const revision = await get(`/api/revisions/${revisionId}`);
       setSelectedRevision(revision);
-      
-      const yamlContent = revision.yaml_path ? 
+
+      const yamlContent = revision.yaml_path ?
         await getWorkspaceFile(revision.yaml_path).catch(() => '') : '';
-      
+
       setForm(prev => ({
         ...prev,
         yaml: yamlContent || '# ML-Agents YAML Configuration\n',
-        cli_flags: JSON.stringify(revision.cli_flags || {}, null, 2)
+        // Only overwrite cli_flags if we're not preserving them from a source run
+        cli_flags: preserveCliFlags ? prev.cli_flags : JSON.stringify(revision.cli_flags || {}, null, 2)
       }));
     } catch (e) {
       console.error('Error loading revision data:', e);
@@ -127,6 +129,9 @@ function NewRunForm() {
       // Load the YAML content from the source run
       const yamlContent = runData.yaml_path ?
         await getWorkspaceFile(runData.yaml_path).catch(() => '') : '';
+
+      // Mark that we want to preserve CLI flags from the source run
+      setPreserveCliFlags(true);
 
       // Pre-populate the form with source run data
       setForm(prev => ({
