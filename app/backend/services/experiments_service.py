@@ -9,11 +9,7 @@ from db import experiments, revisions, runs
 from models import ExperimentModel, ExperimentBody
 from utils.file_tools import delete_files
 from runner import get_effective_run_status
-
-
-class ExperimentError(Exception):
-    """Custom exception for experiment-related errors."""
-    pass
+from exceptions import ExperimentError
 
 
 class ExperimentService:

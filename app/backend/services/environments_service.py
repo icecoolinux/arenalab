@@ -9,6 +9,7 @@ from db import environments, revisions
 from utils.env_tools import process_environment_upload, get_environment_info, EnvExtractionError
 from utils.dependency_checks import check_environment_dependencies, format_warnings_response
 from utils.trash import move_environment_to_trash
+from utils.file_tools import to_relative_path
 import logging
 
 logger = logging.getLogger(__name__)
@@ -105,9 +106,10 @@ class EnvironmentsService:
                     file, version, env_id, name
                 )
 
-                # Update environment record with file paths
+                # Update environment record with file paths (store as relative paths)
                 self.environments_db.update_environment_paths(
-                    env_id, env_path, executable_file, compressed_file_path, original_filename, file_format
+                    env_id, to_relative_path(env_path), executable_file,
+                    to_relative_path(compressed_file_path), original_filename, file_format
                 )
 
                 # Return updated environment

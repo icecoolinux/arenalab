@@ -7,13 +7,13 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 from db import runs, experiments, revisions
 from models import RunBody
-from runner import launch_run, create_run, execute_run, restart_run, stop_run, get_run_status, get_active_runs, get_run_logs, get_effective_run_status, check_process_health, get_stale_runs, force_kill_run
+from runner import (
+    launch_run, create_run, execute_run, restart_run, stop_run,
+    get_run_status, get_active_runs, get_run_logs, get_effective_run_status,
+    check_process_health, get_stale_runs, force_kill_run
+)
 from utils.file_tools import read_file, new_file, ensure_workspace_path
-
-
-class RunError(Exception):
-    """Custom exception for run-related errors."""
-    pass
+from exceptions import RunError
 
 
 class RunService:
@@ -50,8 +50,9 @@ class RunService:
         """
         try:
             # Validate pagination
-            if limit > 1000:
-                raise RunError("Limit cannot exceed 1000")
+            from config import MAX_PAGE_LIMIT
+            if limit > MAX_PAGE_LIMIT:
+                raise RunError(f"Limit cannot exceed {MAX_PAGE_LIMIT}")
             if offset < 0:
                 raise RunError("Offset cannot be negative")
             
@@ -153,7 +154,8 @@ class RunService:
                         description=run_data.description,
                         results_text=run_data.results_text,
                         parent_run_id=run_data.parent_run_id,
-                        parent_revision_id=run_data.parent_revision_id
+                        parent_revision_id=run_data.parent_revision_id,
+                        enabled_plugins=run_data.enabled_plugins
                     )
                 else:
                     # Create run without starting execution
@@ -165,7 +167,8 @@ class RunService:
                         description=run_data.description,
                         results_text=run_data.results_text,
                         parent_run_id=run_data.parent_run_id,
-                        parent_revision_id=run_data.parent_revision_id
+                        parent_revision_id=run_data.parent_revision_id,
+                        enabled_plugins=run_data.enabled_plugins
                     )
             except Exception as e:
                 action = "launch" if auto_start else "create"
@@ -394,13 +397,13 @@ class RunService:
         except Exception as e:
             raise RunError(f"Failed to get run status: {str(e)}") from e
     
-    def get_run_logs(self, run_id: str, max_lines: int = 20000) -> List[str]:  # High limit to show comprehensive run logs
+    def get_run_logs(self, run_id: str, max_lines: int = None) -> List[str]:
         """
         Get recent log lines for a run.
 
         Args:
             run_id: ID of run
-            max_lines: Maximum number of lines to return
+            max_lines: Maximum number of lines to return (defaults to DEFAULT_LOG_LINES)
 
         Returns:
             List of log lines
@@ -413,7 +416,12 @@ class RunService:
             run = self.get_run(run_id)
             if not run:
                 raise RunError(f"Run {run_id} not found")
-            
+
+            # Use default if not specified
+            from config import DEFAULT_LOG_LINES
+            if max_lines is None:
+                max_lines = DEFAULT_LOG_LINES
+
             # Get logs from runner
             logs = get_run_logs(run_id, max_lines)
             return logs

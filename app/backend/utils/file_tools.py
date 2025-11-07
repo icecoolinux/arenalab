@@ -20,87 +20,63 @@ paths = Paths()
 def to_relative_path(absolute_path: str) -> str:
     """
     Convert absolute workspace path to relative path from workspace root.
-    
+
     Args:
         absolute_path (str): Absolute path that may include workspace root
-        
+
     Returns:
         str: Relative path from workspace root (without leading slash)
-        
+
     Examples:
         "/workspace/experiments/44/config.yaml" -> "experiments/44/config.yaml"
+        "experiments/44/config.yaml" -> "experiments/44/config.yaml" (already relative)
     """
     if not absolute_path:
         return ""
-    
+
     # Normalize the path
     absolute_path = os.path.normpath(absolute_path)
     workspace_root = os.path.normpath(WORKSPACE_ROOT)
-    
+
     # If path starts with workspace root, remove it
     if absolute_path.startswith(workspace_root):
         relative_path = absolute_path[len(workspace_root):]
         # Remove leading slash if present
         return relative_path.lstrip('/')
-    
+
     # If path doesn't contain workspace root, assume it's already relative
     return absolute_path.lstrip('/')
 
-def has_workspace_prefix(path: str) -> bool:
-    """
-    Check if a path already starts with the workspace root.
-    
-    Args:
-        path (str): Path to check
-        
-    Returns:
-        bool: True if path starts with workspace root, False otherwise
-    """
-    if not path:
-        return False
-    
-    # Normalize paths for comparison
-    normalized_path = os.path.normpath(path)
-    normalized_workspace = os.path.normpath(WORKSPACE_ROOT)
-    
-    return normalized_path.startswith(normalized_workspace)
 
 def ensure_workspace_path(path: str) -> str:
     """
-    Ensure a path has the workspace root prefix.
-    
+    Ensure a path has the workspace root prefix, converting relative paths to absolute.
+
     Args:
-        path (str): Path that may or may not have workspace prefix
-        
+        path (str): Path that may be relative or absolute
+
     Returns:
-        str: Path with workspace root prefix
-        
+        str: Absolute path with workspace root prefix
+
     Examples:
         "experiments/44/config.yaml" -> "/workspace/experiments/44/config.yaml"
-        "/other/path" -> "/workspace/other/path"
+        "/workspace/experiments/44/config.yaml" -> "/workspace/experiments/44/config.yaml"
+        "/other/path" -> "/workspace/other/path" (workspace prefix added)
     """
     if not path:
         return WORKSPACE_ROOT
-    
-    # If path already has workspace prefix, return as-is
-    if has_workspace_prefix(path):
+
+    # Normalize the path
+    path = os.path.normpath(path)
+    workspace_root = os.path.normpath(WORKSPACE_ROOT)
+
+    # If path already starts with workspace root, return as-is
+    if path.startswith(workspace_root):
         return path
-    
+
     # Remove leading slash if present to ensure proper joining
     path = path.lstrip('/')
     return os.path.join(WORKSPACE_ROOT, path)
-
-def ensure_relative_path(path: str) -> str:
-    """
-    Ensure a path is relative to workspace root.
-    
-    Args:
-        path (str): Path that may be absolute or relative
-        
-    Returns:
-        str: Relative path from workspace root
-    """
-    return to_relative_path(path)
 
 def sanitize_name(name: str) -> str:
     """
@@ -141,13 +117,14 @@ def sanitize_name(name: str) -> str:
     # Ensure we have something left
     if not sanitized:
         return "unnamed"
-    
+
     # Limit length to avoid filesystem issues
-    if len(sanitized) > 50:
-        sanitized = sanitized[:50]
+    from config import MAX_FILENAME_LENGTH
+    if len(sanitized) > MAX_FILENAME_LENGTH:
+        sanitized = sanitized[:MAX_FILENAME_LENGTH]
         # Remove trailing hyphens/underscores after truncation
         sanitized = sanitized.rstrip('-_')
-    
+
     return sanitized
 
 def _get_experiment_name(experiment_id: str) -> str:

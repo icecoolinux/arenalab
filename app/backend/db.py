@@ -30,36 +30,44 @@ def get_db():
 
 class BaseCollection:
 	"""Base class for MongoDB collection operations"""
-	
+
 	def __init__(self, collection_name: str):
 		self.db = get_db()
 		self.collection: Collection = self.db[collection_name]
-	
+
 	def find_one(self, filter_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 		return self.collection.find_one(filter_dict)
-	
+
 	def find_many(self, filter_dict: Dict[str, Any] = None, limit: int = None) -> List[Dict[str, Any]]:
 		cursor = self.collection.find(filter_dict or {})
 		if limit:
 			cursor = cursor.limit(limit)
 		return list(cursor)
-	
+
 	def insert_one(self, document: Dict[str, Any]) -> str:
 		if "_id" not in document:
 			document["_id"] = str(ObjectId())
 		result = self.collection.insert_one(document)
 		return str(result.inserted_id)
-	
+
 	def update_one(self, filter_dict: Dict[str, Any], update_dict: Dict[str, Any]) -> bool:
 		result = self.collection.update_one(filter_dict, {"$set": update_dict})
 		return result.modified_count > 0
-	
+
 	def delete_one(self, filter_dict: Dict[str, Any]) -> bool:
 		result = self.collection.delete_one(filter_dict)
 		return result.deleted_count > 0
-	
+
 	def count_documents(self, filter_dict: Dict[str, Any] = None) -> int:
 		return self.collection.count_documents(filter_dict or {})
+
+	def toggle_favorite(self, document_id: str) -> bool:
+		"""Toggle the favorite status of a document (generic implementation)"""
+		document = self.find_one({"_id": document_id})
+		if not document:
+			return False
+		new_status = not document.get("is_favorite", False)
+		return self.update_one({"_id": document_id}, {"is_favorite": new_status})
 
 
 class UsersCollection(BaseCollection):
@@ -92,13 +100,13 @@ class UsersCollection(BaseCollection):
 
 class ExperimentsCollection(BaseCollection):
 	"""Experiments collection operations"""
-	
+
 	def __init__(self):
 		super().__init__("experiments")
-	
+
 	def find_by_name(self, name: str) -> Optional[Dict[str, Any]]:
 		return self.find_one({"name": name})
-	
+
 	def create_experiment(self, name: str, description: str = "", tags: List[str] = None, enabled_plugins: List[dict] = None) -> str:
 		exp_doc = {
 			"name": name,
@@ -110,14 +118,6 @@ class ExperimentsCollection(BaseCollection):
 			"is_favorite": False
 		}
 		return self.insert_one(exp_doc)
-	
-	def toggle_favorite(self, experiment_id: str) -> bool:
-		"""Toggle the favorite status of an experiment"""
-		experiment = self.find_one({"_id": experiment_id})
-		if not experiment:
-			return False
-		new_status = not experiment.get("is_favorite", False)
-		return self.update_one({"_id": experiment_id}, {"is_favorite": new_status})
 
 
 class RunsCollection(BaseCollection):
@@ -157,14 +157,6 @@ class RunsCollection(BaseCollection):
 				if key in status_updates and status_updates[key] is None:
 					status_updates[key] = datetime.utcnow()
 		return self.update_one({"_id": run_id}, status_updates)
-	
-	def toggle_favorite(self, run_id: str) -> bool:
-		"""Toggle the favorite status of a run"""
-		run = self.find_one({"_id": run_id})
-		if not run:
-			return False
-		new_status = not run.get("is_favorite", False)
-		return self.update_one({"_id": run_id}, {"is_favorite": new_status})
 
 
 class RevisionsCollection(BaseCollection):
@@ -201,14 +193,6 @@ class RevisionsCollection(BaseCollection):
 			"is_favorite": False
 		}
 		return self.insert_one(revision_doc)
-	
-	def toggle_favorite(self, revision_id: str) -> bool:
-		"""Toggle the favorite status of a revision"""
-		revision = self.find_one({"_id": revision_id})
-		if not revision:
-			return False
-		new_status = not revision.get("is_favorite", False)
-		return self.update_one({"_id": revision_id}, {"is_favorite": new_status})
 
 
 class EnvironmentsCollection(BaseCollection):

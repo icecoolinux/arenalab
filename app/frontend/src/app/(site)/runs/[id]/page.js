@@ -23,18 +23,20 @@ export default function RunDetail() {
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [notesText, setNotesText] = useState('');
   const [notesLoading, setNotesLoading] = useState(false);
+  const [refreshingResults, setRefreshingResults] = useState(false);
   const [yamlContent, setYamlContent] = useState('');
   const [yamlExpanded, setYamlExpanded] = useState(false);
   const [tensorboardUrl, setTensorboardUrl] = useState(null);
   const [tensorboardAvailable, setTensorboardAvailable] = useState(false);
   const [runPluginExecutions, setRunPluginExecutions] = useState([]);
-  const [pluginNotes, setPluginNotes] = useState([]);
   const [health, setHealth] = useState(null);
   const [showHealthDetails, setShowHealthDetails] = useState(false);
   const logsContainerRef = useRef(null);
+  const notesContainerRef = useRef(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [autoScrollLogs, setAutoScrollLogs] = useState(false);
   const [showRestartDialog, setShowRestartDialog] = useState(false);
+  const [expandedPlugins, setExpandedPlugins] = useState({});
 
   // Delete confirmation hook
   const deleteHook = useDeleteWithConfirmation(
@@ -166,7 +168,7 @@ export default function RunDetail() {
       checkTensorboardAvailability();
 
       // Load plugin data for this run
-      loadRunPluginData();
+      loadRunPluginData(runData);
 
       // Check health immediately if running/starting
       if (runData.status === 'running' || runData.status === 'starting') {
@@ -184,18 +186,13 @@ export default function RunDetail() {
     }
   }
 
-  async function loadRunPluginData() {
+  async function loadRunPluginData(runData) {
     try {
       // Load plugin executions for this run
-      const pluginResponse = await get('/api/plugins/executions', { 
-        query: { target_id: params.id, scope: 'run' } 
+      const pluginResponse = await get('/api/plugins/executions', {
+        query: { target_id: params.id, scope: 'run' }
       });
       setRunPluginExecutions(pluginResponse.executions || []);
-      
-      // Extract plugin notes if available
-      if (run?.plugin_notes) {
-        setPluginNotes(run.plugin_notes);
-      }
     } catch (e) {
       console.error('Error loading plugin data:', e.message);
     }
@@ -208,6 +205,12 @@ export default function RunDetail() {
       if (run) {
         const prevStatus = run.status;
         setRun(prev => ({ ...prev, ...statusData }));
+
+        // Refresh plugin executions to get latest status
+        const pluginResponse = await get('/api/plugins/executions', {
+          query: { target_id: params.id, scope: 'run' }
+        });
+        setRunPluginExecutions(pluginResponse.executions || []);
 
         // If run just completed, check TensorBoard availability
         if (prevStatus !== 'succeeded' && statusData.status === 'succeeded') {
@@ -253,6 +256,10 @@ export default function RunDetail() {
       } else if (action === 'restart') {
         const url = mode ? `/api/runs/${params.id}/restart?mode=${mode}` : `/api/runs/${params.id}/restart`;
         response = await post(url);
+        // Clear logs immediately for better UX (backend clears stdout.log)
+        if (mode === 'force') {
+          setLogs('');
+        }
       }
 
       await loadRunData();
@@ -289,6 +296,27 @@ export default function RunDetail() {
   function cancelEditNotes() {
     setNotesText(run?.results_text || '');
     setIsEditingNotes(false);
+  }
+
+  async function refreshResults() {
+    try {
+      setRefreshingResults(true);
+      const runData = await get(`/api/runs/${params.id}`);
+      setRun(prev => ({ ...prev, results_text: runData.results_text }));
+      if (!isEditingNotes) {
+        setNotesText(runData.results_text || '');
+      }
+      // Scroll to end after refresh
+      setTimeout(() => {
+        if (notesContainerRef.current) {
+          notesContainerRef.current.scrollTop = notesContainerRef.current.scrollHeight;
+        }
+      }, 100);
+    } catch (e) {
+      console.error('Error refreshing results:', e);
+    } finally {
+      setRefreshingResults(false);
+    }
   }
 
   async function checkHealth() {
@@ -388,6 +416,13 @@ export default function RunDetail() {
       top: document.documentElement.scrollHeight,
       behavior: 'smooth'
     });
+  }
+
+  function togglePlugin(pluginKey) {
+    setExpandedPlugins(prev => ({
+      ...prev,
+      [pluginKey]: !prev[pluginKey]
+    }));
   }
 
   if (loading) {
@@ -764,13 +799,23 @@ export default function RunDetail() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <h3>Results Notes</h3>
             {!isEditingNotes ? (
-              <button
-                className="btn"
-                style={{ fontSize: '12px', border: '1px solid #06b6d4' }}
-                onClick={() => setIsEditingNotes(true)}
-              >
-                {run.results_text ? 'Edit' : 'Add'}
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  className="btn"
+                  style={{ fontSize: '12px', border: '1px solid #6366f1' }}
+                  onClick={refreshResults}
+                  disabled={refreshingResults}
+                >
+                  {refreshingResults ? 'Refreshing...' : '↻ Refresh Notes'}
+                </button>
+                <button
+                  className="btn"
+                  style={{ fontSize: '12px', border: '1px solid #06b6d4' }}
+                  onClick={() => setIsEditingNotes(true)}
+                >
+                  {run.results_text ? 'Edit' : 'Add'}
+                </button>
+              </div>
             ) : (
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button
@@ -813,13 +858,18 @@ export default function RunDetail() {
               disabled={notesLoading}
             />
           ) : (
-            <div style={{ 
-              background: '#0b0f14', 
-              border: '1px solid #374151', 
-              borderRadius: '6px', 
-              padding: '12px',
-              minHeight: '40px'
-            }}>
+            <div
+              ref={notesContainerRef}
+              style={{
+                background: '#0b0f14',
+                border: '1px solid #374151',
+                borderRadius: '6px',
+                padding: '12px',
+                minHeight: '40px',
+                maxHeight: '400px',
+                overflowY: 'auto'
+              }}
+            >
               {run.results_text ? (
                 <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '14px' }}>
                   {run.results_text}
@@ -834,113 +884,161 @@ export default function RunDetail() {
         </div>
 
         {/* Plugin Information Section */}
-        {(runPluginExecutions.length > 0 || pluginNotes.length > 0 || (experiment?.enabled_plugins && experiment.enabled_plugins.some(p => p.scope === 'run'))) && (
+        {(runPluginExecutions.length > 0 || (experiment?.enabled_plugins && experiment.enabled_plugins.some(p => p.scope === 'run')) || (run?.enabled_plugins && run.enabled_plugins.length > 0)) && (
           <div style={{ marginBottom: '24px' }}>
             <h3 style={{ marginBottom: '16px' }}>🤖 AI Plugin Insights</h3>
-            
-            {/* Plugin-generated notes */}
-            {pluginNotes.length > 0 && (
-              <div style={{ marginBottom: '16px' }}>
-                <h4 style={{ fontSize: '16px', marginBottom: '12px' }}>AI Analysis & Insights</h4>
-                <div style={{ display: 'grid', gap: '8px' }}>
-                  {pluginNotes.map((note, index) => (
-                    <div 
-                      key={index}
-                      style={{
-                        background: '#f0f9ff',
-                        border: '1px solid #bfdbfe',
-                        borderRadius: '8px',
-                        padding: '12px'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                        <span style={{ fontWeight: '500', fontSize: '12px', color: '#1e40af' }}>
-                          🤖 {note.plugin_name}
-                        </span>
-                        <span style={{ fontSize: '11px', color: '#6b7280' }}>
-                          {new Date(note.timestamp).toLocaleString()}
-                        </span>
-                      </div>
-                      <div style={{ color: '#374151', fontSize: '14px', lineHeight: '1.4' }}>
-                        {note.content}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
-            {/* Active run plugins */}
-            {runPluginExecutions.length > 0 && (
+            {/* Combined Plugins Section */}
+            {((experiment?.enabled_plugins && experiment.enabled_plugins.filter(p => p.scope === 'run').length > 0) || (run?.enabled_plugins && run.enabled_plugins.length > 0) || runPluginExecutions.length > 0) && (
               <div style={{ marginBottom: '16px' }}>
-                <h4 style={{ fontSize: '16px', marginBottom: '12px' }}>Active Run Plugins</h4>
+                <h4 style={{ fontSize: '16px', marginBottom: '12px' }}>Plugins</h4>
                 <div style={{ display: 'grid', gap: '8px' }}>
-                  {runPluginExecutions.map((execution) => (
-                    <div 
-                      key={execution.execution_id}
-                      style={{
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '6px',
-                        padding: '12px',
-                        backgroundColor: execution.status === 'running' ? '#f0f9ff' : '#f9fafb'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontSize: '16px' }}>
-                            {execution.plugin_name === 'auto_analyzer' && '📊'}
-                            {execution.plugin_name === 'performance_monitor' && '📈'}
-                          </span>
-                          <span style={{ fontWeight: '500' }}>{execution.plugin_name}</span>
-                          <span style={{ 
-                            fontSize: '11px',
-                            padding: '2px 6px',
-                            borderRadius: '10px',
-                            backgroundColor: execution.status === 'running' ? '#dcfce7' : 
-                                           execution.status === 'completed' ? '#d1fae5' : '#fef2f2',
-                            color: execution.status === 'running' ? '#166534' : 
-                                  execution.status === 'completed' ? '#065f46' : '#991b1b'
-                          }}>
-                            {execution.status}
-                          </span>
+                  {/* Merge enabled plugins with their executions */}
+                  {(() => {
+                    // Collect all enabled plugins
+                    const allEnabledPlugins = [
+                      ...(run?.enabled_plugins || []).map(p => ({ ...p, source: 'run' })),
+                      ...(experiment?.enabled_plugins?.filter(p => p.scope === 'run') || []).map(p => ({ ...p, source: 'experiment' }))
+                    ];
+
+                    // Create a map of plugin names to their execution data
+                    const executionMap = {};
+                    runPluginExecutions.forEach(exec => {
+                      executionMap[exec.plugin_name] = exec;
+                    });
+
+                    // Get unique plugin names
+                    const pluginNames = new Set([
+                      ...allEnabledPlugins.map(p => p.name),
+                      ...runPluginExecutions.map(e => e.plugin_name)
+                    ]);
+
+                    return Array.from(pluginNames).map((pluginName, index) => {
+                      const enabledPlugin = allEnabledPlugins.find(p => p.name === pluginName);
+                      const execution = executionMap[pluginName];
+                      const pluginKey = `plugin-${pluginName}-${index}`;
+                      const isExpanded = expandedPlugins[pluginKey];
+
+                      return (
+                        <div
+                          key={pluginKey}
+                          style={{
+                            border: '1px solid #374151',
+                            borderRadius: '6px',
+                            backgroundColor: '#1f2937',
+                            overflow: 'hidden'
+                          }}
+                        >
+                          <div
+                            onClick={() => togglePlugin(pluginKey)}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              padding: '12px',
+                              cursor: 'pointer',
+                              userSelect: 'none'
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                              <span style={{ fontSize: '12px', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                                ▶
+                              </span>
+                              <span style={{ fontSize: '16px' }}>
+                                {pluginName === 'auto_analyzer' && '🤖'}
+                                {pluginName === 'performance_monitor' && '📈'}
+                              </span>
+                              <span style={{ fontWeight: '500' }}>{pluginName}</span>
+                              {enabledPlugin && (
+                                <span style={{
+                                  fontSize: '11px',
+                                  padding: '2px 6px',
+                                  borderRadius: '10px',
+                                  backgroundColor: '#1e3a8a',
+                                  color: '#bfdbfe'
+                                }}>
+                                  {enabledPlugin.source}
+                                </span>
+                              )}
+                              {execution && (
+                                <span style={{
+                                  fontSize: '11px',
+                                  padding: '2px 6px',
+                                  borderRadius: '10px',
+                                  backgroundColor: execution.status === 'running' ? '#065f46' :
+                                                 execution.status === 'completed' ? '#064e3b' : '#7f1d1d',
+                                  color: execution.status === 'running' ? '#d1fae5' :
+                                        execution.status === 'completed' ? '#d1fae5' : '#fecaca'
+                                }}>
+                                  {execution.status === 'completed' ? '✓ completed' : execution.status}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {isExpanded && (
+                            <div style={{ padding: '0 12px 12px 12px' }}>
+                              {/* Show execution details if available */}
+                              {execution && (
+                                <div style={{ marginBottom: '12px' }}>
+                                  <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '4px' }}>
+                                    {execution.started_at && `Started: ${new Date(execution.started_at).toLocaleString()}`}
+                                  </div>
+                                  {execution.error_message && (
+                                    <div style={{
+                                      fontSize: '11px',
+                                      color: '#fca5a5',
+                                      backgroundColor: '#7f1d1d',
+                                      padding: '6px 8px',
+                                      borderRadius: '4px'
+                                    }}>
+                                      Error: {execution.error_message}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Show settings if available */}
+                              {enabledPlugin?.settings && Object.keys(enabledPlugin.settings).length > 0 && (
+                                <div style={{
+                                  padding: '8px',
+                                  backgroundColor: '#0b0f14',
+                                  borderRadius: '4px',
+                                  fontSize: '12px',
+                                  fontFamily: 'monospace'
+                                }}>
+                                  <div style={{ fontWeight: '600', marginBottom: '4px', color: '#9ca3af' }}>Settings:</div>
+                                  {Object.entries(enabledPlugin.settings).map(([key, value]) => (
+                                    <div key={key} style={{ color: '#d1d5db' }}>
+                                      <span style={{ color: '#9ca3af' }}>{key}:</span> {String(value)}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <div style={{ fontSize: '11px', color: '#6b7280' }}>
-                          {execution.started_at && `Started: ${new Date(execution.started_at).toLocaleString()}`}
-                        </div>
-                      </div>
-                      
-                      {execution.error_message && (
-                        <div style={{ 
-                          marginTop: '8px',
-                          fontSize: '11px',
-                          color: '#dc2626',
-                          backgroundColor: '#fef2f2',
-                          padding: '6px 8px',
-                          borderRadius: '4px'
-                        }}>
-                          Error: {execution.error_message}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                      );
+                    });
+                  })()}
                 </div>
               </div>
             )}
 
             {/* No plugins message */}
-            {runPluginExecutions.length === 0 && pluginNotes.length === 0 && (
-              <div style={{ 
-                textAlign: 'center', 
+            {runPluginExecutions.length === 0 && !run?.enabled_plugins?.length && !(experiment?.enabled_plugins && experiment.enabled_plugins.filter(p => p.scope === 'run').length > 0) && (
+              <div style={{
+                textAlign: 'center',
                 padding: '20px',
-                color: '#6b7280',
-                backgroundColor: '#f9fafb',
+                color: '#9ca3af',
+                backgroundColor: '#1f2937',
                 borderRadius: '8px',
-                border: '1px solid #e5e7eb'
+                border: '1px solid #374151'
               }}>
                 <div style={{ fontSize: '24px', marginBottom: '8px' }}>🔌</div>
                 <div style={{ fontSize: '14px' }}>
-                  No run plugins active. 
-                  <Link href="/plugins" style={{ color: '#3b82f6', textDecoration: 'none', marginLeft: '4px' }}>
+                  No plugins configured.
+                  <Link href="/plugins" style={{ color: '#60a5fa', textDecoration: 'none', marginLeft: '4px' }}>
                     Browse plugins →
                   </Link>
                 </div>

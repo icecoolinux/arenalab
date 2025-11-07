@@ -58,6 +58,7 @@ workspace/mongo/
 workspace/tb_logs/
 workspace/experiments/
 workspace/unity_envs/
+workspace/trash/
 
 # IDE
 .vscode/
@@ -65,6 +66,9 @@ workspace/unity_envs/
 *.swp
 *.swo
 *~
+
+# Playwright MCP
+.playwright-mcp/
 
 # OS
 .DS_Store

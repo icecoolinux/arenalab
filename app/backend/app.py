@@ -1,8 +1,9 @@
 import os
 from dotenv import load_dotenv
 from utils.file_tools import paths
+import httpx
 
-# Load enviornment variables
+# Load environment variables
 # First try the main env file in workspace
 env_path = os.path.join(paths.CONFIG_DIR, "secrets.env")
 if os.path.exists(env_path):
@@ -18,8 +19,6 @@ from fastapi.responses import RedirectResponse, StreamingResponse, Response
 from db import users
 from auth import hash_password
 from routers import auth_router, experiments_router, runs_router, settings_router, revisions_router, environments_router, files_router, plugins_router
-import os
-import httpx
 
 
 app = FastAPI(
@@ -178,13 +177,13 @@ async def tensorboard_proxy(request: Request, path: str):
 
 @app.on_event("startup")
 def on_start():
-	# bootstrap admin
+	# Bootstrap admin user
 	if users.count_documents({}) == 0:
 		email = os.getenv("ADMIN_EMAIL")
 		pw = os.getenv("ADMIN_PASSWORD")
 
 		if not email or not pw:
-			print("[bootstrap] ADMIN_EMAIL o ADMIN_PASSWORD no están definidos, no se creará usuario admin.")
+			print("[bootstrap] ADMIN_EMAIL or ADMIN_PASSWORD not defined, admin user will not be created.")
 			return
 
 		users.create_user(
@@ -193,7 +192,7 @@ def on_start():
 			password_hash=hash_password(pw),
 			role="admin"
 		)
-		print(f"[bootstrap] Admin creado: {email}")
+		print(f"[bootstrap] Admin user created: {email}")
 	
 	# Initialize plugins (auto-discovery happens on import)
 	try:

@@ -10,17 +10,10 @@ from models import RevisionBody
 from utils.file_tools import paths, new_file, ensure_revision_structure, get_revision_path
 from utils.dependency_checks import check_revision_dependencies, format_warnings_response
 from utils.trash import move_revision_to_trash
+from exceptions import RevisionError, NotFoundError, ConflictError
 import logging
 
 logger = logging.getLogger(__name__)
-
-
-class RevisionError(Exception):
-    """Custom exception for revision-related errors."""
-    def __init__(self, message: str, status_code: int = 400, detail: Dict[str, Any] = None):
-        super().__init__(message)
-        self.status_code = status_code
-        self.detail = detail or {"message": message}
 
 
 class RevisionsService:
@@ -80,7 +73,7 @@ class RevisionsService:
             # Get experiment name for directory structure
             experiment = self.experiments_db.find_one({"_id": revision_data.experiment_id})
             if not experiment:
-                raise RevisionError(f"Experiment {revision_data.experiment_id} not found", status_code=404)
+                raise NotFoundError(f"Experiment {revision_data.experiment_id} not found")
 
             experiment_name = experiment.get("name", "unknown")
 
@@ -134,7 +127,7 @@ class RevisionsService:
         try:
             updated_revision = self.revisions_db.update_one({"_id": revision_id}, {"results_text": results_text})
             if not updated_revision:
-                raise RevisionError(f"Revision {revision_id} not found", status_code=404)
+                raise NotFoundError(f"Revision {revision_id} not found")
             return self.revisions_db.find_one({"_id": revision_id})
         except RevisionError:
             raise
@@ -157,11 +150,11 @@ class RevisionsService:
         try:
             revision = self.revisions_db.find_one({"_id": revision_id})
             if not revision:
-                raise RevisionError(f"Revision {revision_id} not found", status_code=404)
+                raise NotFoundError(f"Revision {revision_id} not found")
 
             success = self.revisions_db.toggle_favorite(revision_id)
             if not success:
-                raise RevisionError("Failed to toggle revision favorite status", status_code=400)
+                raise RevisionError("Failed to toggle revision favorite status")
 
             return self.revisions_db.find_one({"_id": revision_id})
         except RevisionError:
@@ -184,7 +177,7 @@ class RevisionsService:
         """
         rev = self.get_revision(revision_id)
         if not rev:
-            raise RevisionError(f"Revision {revision_id} not found", status_code=404)
+            raise NotFoundError(f"Revision {revision_id} not found")
 
         warnings = check_revision_dependencies(revision_id)
         return format_warnings_response(warnings)
@@ -210,7 +203,7 @@ class RevisionsService:
         # Get revision info
         rev = self.get_revision(revision_id)
         if not rev:
-            raise RevisionError(f"Revision {revision_id} not found", status_code=404)
+            raise NotFoundError(f"Revision {revision_id} not found")
 
         # Get experiment info for directory structure
         experiment = self.experiments_db.find_one({"_id": rev.get("experiment_id")})
@@ -225,9 +218,8 @@ class RevisionsService:
                 "message": "Revision has dependencies. Set confirmed=true to proceed with deletion.",
                 **format_warnings_response(warnings)
             }
-            raise RevisionError(
+            raise ConflictError(
                 "Revision has dependencies",
-                status_code=409,
                 detail=error_detail
             )
 
@@ -251,7 +243,7 @@ class RevisionsService:
         # Delete from database
         deleted = self.revisions_db.delete_one({"_id": revision_id})
         if not deleted:
-            raise RevisionError("Failed to delete revision from database", status_code=500)
+            raise RevisionError("Failed to delete revision from database")
 
         return {
             "message": "Revision moved to trash successfully",
