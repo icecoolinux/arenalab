@@ -37,6 +37,12 @@ export default function RunDetail() {
   const [autoScrollLogs, setAutoScrollLogs] = useState(false);
   const [showRestartDialog, setShowRestartDialog] = useState(false);
   const [expandedPlugins, setExpandedPlugins] = useState({});
+  const [expandedSections, setExpandedSections] = useState({
+    metadata: true,
+    configuration: false,
+    results: true,
+    logs: true
+  });
 
   // Delete confirmation hook
   const deleteHook = useDeleteWithConfirmation(
@@ -425,6 +431,13 @@ export default function RunDetail() {
     }));
   }
 
+  function toggleSection(sectionKey) {
+    setExpandedSections(prev => ({
+      ...prev,
+      [sectionKey]: !prev[sectionKey]
+    }));
+  }
+
   if (loading) {
     return <div className="card"><p>Loading...</p></div>;
   }
@@ -454,41 +467,28 @@ export default function RunDetail() {
   return (
     <>
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '16px' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
-                <ContextTag type="run" label="Run" id={run._id.slice(-8)} />
-                <h1 style={{ margin: '0', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
-                  {run._id.slice(-8)}
-                </h1>
-              </div>
+        {/* Sticky Header */}
+        <div className="sticky-header">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
+              <ContextTag type="run" label="Run" id={run._id.slice(-8)} />
+              <h1 style={{ margin: '0', fontFamily: 'monospace', fontSize: '20px' }}>
+                {run._id.slice(-8)}
+              </h1>
+              <span className={`status-badge status-${run.status || 'pending'}`}>
+                {run.status || 'unknown'}
+              </span>
               <StarButton
                 entityType="run"
                 entityId={run._id}
                 isFavorite={run.is_favorite || false}
                 size="medium"
                 onToggle={(newFavoriteState) => {
-                  // Update the run in the local state
                   setRun({ ...run, is_favorite: newFavoriteState });
                 }}
               />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-              <span
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  background: getStatusColor(run.status),
-                  color: 'white',
-                  fontWeight: 'bold'
-                }}
-              >
-                {run.status || 'unknown'}
-              </span>
               {(run.status === 'running' || run.status === 'starting') && (
-                <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '14px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: '#9ca3af' }}>
                   <input
                     type="checkbox"
                     checked={autoRefresh}
@@ -497,330 +497,332 @@ export default function RunDetail() {
                   Auto-refresh
                 </label>
               )}
-              {health && health.stuck && (
-                <span
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: '6px',
-                    fontSize: '14px',
-                    background: '#f59e0b',
-                    color: 'white',
-                    fontWeight: 'bold',
-                    cursor: 'pointer'
-                  }}
-                  onClick={() => setShowHealthDetails(!showHealthDetails)}
-                  title="Click to view details"
-                >
-                  ⚠️ Possibly stuck
-                </span>
-              )}
             </div>
-            {showHealthDetails && health && (
-              <div style={{
-                marginTop: '12px',
-                padding: '12px',
-                background: '#fef3c7',
-                borderRadius: '6px',
-                fontSize: '14px',
-                color: '#78350f'
-              }}>
-                <div><strong>Health status:</strong> {health.healthy ? '✓ Healthy' : '⚠️ Unhealthy'}</div>
-                <div><strong>Reason:</strong> {health.reason}</div>
-                {health.runtime_seconds !== undefined && (
-                  <div><strong>Runtime:</strong> {Math.floor(health.runtime_seconds / 60)}m {Math.floor(health.runtime_seconds % 60)}s</div>
-                )}
-                {health.seconds_since_log_update !== undefined && (
-                  <div><strong>Last log activity:</strong> {health.seconds_since_log_update}s ago</div>
-                )}
-                {health.pid && <div><strong>PID:</strong> {health.pid}</div>}
-              </div>
-            )}
-          </div>
-          
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {run.status === 'created' && (
-              <button
-                className="btn"
-                style={{ fontSize: '18px', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0', border: '1px solid #10b981' }}
-                onClick={() => controlRun('execute')}
-                title="Execute this run with its immutable configuration"
-              >
-                ▷
-              </button>
-            )}
-            
-            {(run.status === 'running' || run.status === 'starting') && (
-              <>
+
+            <div className="action-btn-group">
+              {run.status === 'created' && (
                 <button
-                  className="btn"
-                  style={{ fontSize: '18px', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0', border: '1px solid #ef4444' }}
-                  onClick={() => controlRun('stop')}
-                  title="Stop"
+                  className="btn icon-btn"
+                  style={{ border: '1px solid #10b981' }}
+                  onClick={() => controlRun('execute')}
+                  title="Execute this run with its immutable configuration"
                 >
-                  ◼
+                  ▷
                 </button>
-                {health && health.stuck && (
+              )}
+
+              {(run.status === 'running' || run.status === 'starting') && (
+                <>
                   <button
-                    className="btn"
-                    style={{ fontSize: '18px', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0', border: '2px solid #dc2626', background: '#dc2626', color: 'white' }}
-                    onClick={forceKillRun}
-                    title="Force termination (stuck process)"
+                    className="btn icon-btn"
+                    style={{ border: '1px solid #ef4444' }}
+                    onClick={() => controlRun('stop')}
+                    title="Stop"
                   >
-                    ⚠
+                    ◼
                   </button>
-                )}
-              </>
-            )}
-            
-            {(run.status === 'succeeded' || run.status === 'failed' || run.status === 'stopped' || run.status === 'killed') && (
-              <button
-                className="btn"
-                style={{ fontSize: '18px', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0', border: '1px solid #f59e0b' }}
-                onClick={() => setShowRestartDialog(true)}
-                title="Restart with the same immutable configuration"
-              >
-                ⟲
-              </button>
-            )}
+                  {health && health.stuck && (
+                    <button
+                      className="btn icon-btn"
+                      style={{ border: '2px solid #dc2626', background: '#dc2626', color: 'white' }}
+                      onClick={forceKillRun}
+                      title="Force termination (stuck process)"
+                    >
+                      ⚠
+                    </button>
+                  )}
+                </>
+              )}
 
-            {(run.status === 'succeeded' || run.status === 'failed' || run.status === 'stopped' || run.status === 'killed') && (
+              {(run.status === 'succeeded' || run.status === 'failed' || run.status === 'stopped' || run.status === 'killed') && (
+                <button
+                  className="btn icon-btn"
+                  style={{ border: '1px solid #f59e0b' }}
+                  onClick={() => setShowRestartDialog(true)}
+                  title="Restart with the same immutable configuration"
+                >
+                  ⟲
+                </button>
+              )}
+
+              {(run.status === 'succeeded' || run.status === 'failed' || run.status === 'stopped' || run.status === 'killed') && (
+                <Link
+                  href={`/revisions/new?parent_run_id=${run._id}`}
+                  className="btn icon-btn"
+                  style={{ border: '1px solid #06b6d4' }}
+                  title="Create new revision based on this run"
+                >
+                  ↗
+                </Link>
+              )}
+
               <Link
-                href={`/revisions/new?parent_run_id=${run._id}`}
-                className="btn"
-                style={{ fontSize: '18px', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0', border: '1px solid #06b6d4' }}
-                title="Create new revision based on this run"
+                href={`/runs/new?source=${run._id}`}
+                className="btn icon-btn"
+                style={{ border: '1px solid #6366f1' }}
+                title="Create new run based on this one"
               >
-                ↗
+                ⊕
               </Link>
-            )}
 
-            <Link
-              href={`/runs/new?source=${run._id}`}
-              className="btn"
-              style={{ fontSize: '18px', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0', border: '1px solid #6366f1' }}
-              title="Create new run based on this one"
-            >
-              ⊕
-            </Link>
-
-            <button
-              className="btn"
-              style={{ fontSize: '18px', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0', border: '1px solid #ef4444' }}
-              onClick={handleDeleteRun}
-              title="Delete"
-            >
-              ×
-            </button>
+              <button
+                className="btn icon-btn"
+                style={{ border: '1px solid #ef4444' }}
+                onClick={handleDeleteRun}
+                title="Delete"
+              >
+                ×
+              </button>
+            </div>
           </div>
         </div>
 
+        {/* Health Warning Banner */}
+        {health && health.stuck && (
+          <div className="warning-box mb-16">
+            <div style={{ display: 'flex', alignItems: 'start', gap: '12px' }}>
+              <div style={{ fontSize: '24px' }}>⚠️</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Process May Be Stuck</div>
+                <div style={{ fontSize: '14px', marginBottom: '8px' }}>{health.reason}</div>
+                <div style={{ fontSize: '13px', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 12px' }}>
+                  <strong>Status:</strong>
+                  <span>{health.healthy ? '✓ Healthy' : '⚠️ Unhealthy'}</span>
+                  {health.runtime_seconds !== undefined && (
+                    <>
+                      <strong>Runtime:</strong>
+                      <span>{Math.floor(health.runtime_seconds / 60)}m {Math.floor(health.runtime_seconds % 60)}s</span>
+                    </>
+                  )}
+                  {health.seconds_since_log_update !== undefined && (
+                    <>
+                      <strong>Last log activity:</strong>
+                      <span>{health.seconds_since_log_update}s ago</span>
+                    </>
+                  )}
+                  {health.pid && (
+                    <>
+                      <strong>PID:</strong>
+                      <span>{health.pid}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {error && (
-          <div style={{
-            background: '#dc2626',
-            color: 'white',
-            padding: '12px',
-            borderRadius: '8px',
-            marginBottom: '16px'
-          }}>
+          <div className="error-box">
             {error}
           </div>
         )}
 
         {run.status === 'created' && (
-          <div style={{
-            background: '#1e3a5f',
-            border: '2px solid #3b82f6',
-            borderRadius: '8px',
-            padding: '16px',
-            marginBottom: '16px'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'start', gap: '12px' }}>
-              <div style={{ fontSize: '24px', lineHeight: '1' }}>ℹ️</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 'bold', marginBottom: '4px', fontSize: '16px', color: '#93c5fd' }}>
-                  Run Created - Ready to Execute
-                </div>
-                <div style={{ fontSize: '14px', color: '#bfdbfe', lineHeight: '1.5' }}>
-                  This run has been created with an immutable configuration but has not been executed yet.
-                  Click the <strong>Execute button (▷)</strong> above to start the training process.
-                </div>
+          <div className="info-box">
+            <div style={{ fontSize: '24px', lineHeight: '1' }}>ℹ️</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 'bold', marginBottom: '4px', fontSize: '16px', color: '#93c5fd' }}>
+                Run Created - Ready to Execute
+              </div>
+              <div style={{ fontSize: '14px', color: '#bfdbfe', lineHeight: '1.5' }}>
+                This run has been created with an immutable configuration but has not been executed yet.
+                Click the <strong>Execute button (▷)</strong> above to start the training process.
               </div>
             </div>
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
-          <div>
-            <h3>General Information</h3>
-            <table style={{ width: '100%' }}>
-              <tbody>
-                <tr>
-                  <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Run ID:</td>
-                  <td style={{ padding: '8px 0', fontFamily: 'monospace' }}>{run._id}</td>
-                </tr>
-                <tr>
-                  <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Experiment:</td>
-                  <td style={{ padding: '8px 0' }}>
-                    {experiment && (
-                      <Link href={`/experiments/${experiment._id}`}>
-                        {experiment.name}
-                      </Link>
-                    )}
-                  </td>
-                </tr>
-                <tr>
-                  <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Revision:</td>
-                  <td style={{ padding: '8px 0' }}>
-                    {revision && (
-                      <Link href={`/revisions/${revision._id}`}>
-                        v{revision.version} - {revision.name}
-                      </Link>
-                    )}
-                  </td>
-                </tr>
-                <tr>
-                  <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Created:</td>
-                  <td style={{ padding: '8px 0' }}>{formatDate(run.created_at)}</td>
-                </tr>
-                <tr>
-                  <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Started:</td>
-                  <td style={{ padding: '8px 0' }}>{formatDate(run.started_at)}</td>
-                </tr>
-                <tr>
-                  <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Ended:</td>
-                  <td style={{ padding: '8px 0' }}>{formatDate(run.ended_at)}</td>
-                </tr>
-                {(run.execution_count > 0) && (
-                  <tr>
-                    <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Executions:</td>
-                    <td style={{ padding: '8px 0' }}>
-                      {run.execution_count}
-                      {run.execution_count > 1 && (
-                        <span style={{ color: '#9ca3af', fontSize: '12px', marginLeft: '8px' }}>
-                          (restarted {run.execution_count - 1} time{run.execution_count > 2 ? 's' : ''})
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                )}
-                {run.last_restarted_at && (
-                  <tr>
-                    <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Last restart:</td>
-                    <td style={{ padding: '8px 0' }}>{formatDate(run.last_restarted_at)}</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <h3 style={{ margin: 0 }}>CLI Flags</h3>
-              <span style={{ 
-                background: '#374151', 
-                color: '#9ca3af', 
-                fontSize: '10px', 
-                padding: '2px 6px', 
-                borderRadius: '4px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px'
-              }}>
-                🔒 Immutable
+        {/* Metadata Section - Collapsible */}
+        <div className="collapsible-section mb-24">
+          <div className="collapsible-header" onClick={() => toggleSection('metadata')}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '14px', transition: 'transform 0.2s', transform: expandedSections.metadata ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                ▶
               </span>
+              <h3 style={{ margin: 0, fontSize: '16px' }}>Metadata & General Information</h3>
             </div>
-            {run.cli_flags && Object.keys(run.cli_flags).length > 0 ? (
-              <div style={{
-                background: '#0b0f14',
-                border: '1px solid #374151',
-                borderRadius: '6px',
-                padding: '12px'
-              }}>
-                <pre style={{ margin: 0, fontSize: '12px', fontFamily: 'monospace' }}>
-                  {JSON.stringify(run.cli_flags, null, 2)}
-                </pre>
-              </div>
-            ) : (
-              <p style={{ color: '#9ca3af' }}>No CLI flags configured</p>
-            )}
           </div>
+          {expandedSections.metadata && (
+            <div className="collapsible-content">
+              <div className="info-grid">
+                <div>
+                  <h4 style={{ fontSize: '14px', color: '#9ca3af', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    General Information
+                  </h4>
+                  <table style={{ width: '100%', fontSize: '14px' }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ padding: '8px 0', fontWeight: '500', color: '#9ca3af' }}>Run ID:</td>
+                        <td style={{ padding: '8px 0', fontFamily: 'monospace', fontSize: '13px' }}>{run._id}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: '8px 0', fontWeight: '500', color: '#9ca3af' }}>Experiment:</td>
+                        <td style={{ padding: '8px 0' }}>
+                          {experiment && (
+                            <Link href={`/experiments/${experiment._id}`} style={{ color: '#60a5fa', fontWeight: '500' }}>
+                              {experiment.name}
+                            </Link>
+                          )}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: '8px 0', fontWeight: '500', color: '#9ca3af' }}>Revision:</td>
+                        <td style={{ padding: '8px 0' }}>
+                          {revision && (
+                            <Link href={`/revisions/${revision._id}`} style={{ color: '#60a5fa', fontWeight: '500' }}>
+                              v{revision.version} - {revision.name}
+                            </Link>
+                          )}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: '8px 0', fontWeight: '500', color: '#9ca3af' }}>Created:</td>
+                        <td style={{ padding: '8px 0' }}>{formatDate(run.created_at)}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: '8px 0', fontWeight: '500', color: '#9ca3af' }}>Started:</td>
+                        <td style={{ padding: '8px 0' }}>{formatDate(run.started_at)}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: '8px 0', fontWeight: '500', color: '#9ca3af' }}>Ended:</td>
+                        <td style={{ padding: '8px 0' }}>{formatDate(run.ended_at)}</td>
+                      </tr>
+                      {(run.execution_count > 0) && (
+                        <tr>
+                          <td style={{ padding: '8px 0', fontWeight: '500', color: '#9ca3af' }}>Executions:</td>
+                          <td style={{ padding: '8px 0' }}>
+                            {run.execution_count}
+                            {run.execution_count > 1 && (
+                              <span style={{ color: '#6b7280', fontSize: '12px', marginLeft: '8px' }}>
+                                (restarted {run.execution_count - 1} time{run.execution_count > 2 ? 's' : ''})
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                      {run.last_restarted_at && (
+                        <tr>
+                          <td style={{ padding: '8px 0', fontWeight: '500', color: '#9ca3af' }}>Last restart:</td>
+                          <td style={{ padding: '8px 0' }}>{formatDate(run.last_restarted_at)}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                    <h4 style={{ fontSize: '14px', color: '#9ca3af', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      CLI Flags
+                    </h4>
+                    <span className="badge badge-neutral">
+                      🔒 Immutable
+                    </span>
+                  </div>
+                  {run.cli_flags && Object.keys(run.cli_flags).length > 0 ? (
+                    <div className="code-block">
+                      <pre style={{ margin: 0 }}>
+                        {JSON.stringify(run.cli_flags, null, 2)}
+                      </pre>
+                    </div>
+                  ) : (
+                    <p style={{ color: '#6b7280', fontSize: '14px' }}>No CLI flags configured</p>
+                  )}
+                </div>
+              </div>
+
+              {run.description && (
+                <div className="mt-16">
+                  <h4 style={{ fontSize: '14px', color: '#9ca3af', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Description
+                  </h4>
+                  <p style={{ whiteSpace: 'pre-wrap', fontSize: '14px', lineHeight: '1.6' }}>{run.description}</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {run.description && (
-          <div style={{ marginBottom: '24px' }}>
-            <h3>Description</h3>
-            <p style={{ whiteSpace: 'pre-wrap' }}>{run.description}</p>
-          </div>
-        )}
-
+        {/* Configuration Section - Collapsible */}
         {yamlContent && (
-          <div style={{ marginBottom: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h3 style={{ margin: 0 }}>YAML Configuration</h3>
-                <span style={{
-                  background: '#374151',
-                  color: '#9ca3af',
-                  fontSize: '10px',
-                  padding: '2px 6px',
-                  borderRadius: '4px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px'
-                }}>
+          <div className="collapsible-section mb-24">
+            <div className="collapsible-header" onClick={() => toggleSection('configuration')}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '14px', transition: 'transform 0.2s', transform: expandedSections.configuration ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                  ▶
+                </span>
+                <h3 style={{ margin: 0, fontSize: '16px' }}>YAML Configuration</h3>
+                <span className="badge badge-neutral">
                   🔒 Immutable
                 </span>
               </div>
-              <button
-                className="btn"
-                onClick={() => setYamlExpanded(!yamlExpanded)}
-                style={{
-                  border: '1px solid #374151',
-                  fontSize: '12px',
-                  padding: '6px 12px'
-                }}
-              >
-                {yamlExpanded ? '⌃ Collapse' : '⌄ Expand'}
-              </button>
             </div>
-            <div style={{ 
-              maxHeight: yamlExpanded ? 'none' : '400px',
-              overflowY: yamlExpanded ? 'visible' : 'auto'
-            }}>
-              <YamlEditor
-                value={yamlContent}
-                onChange={() => {}} // No-op for read-only
-                height={yamlExpanded ? `${Math.max(600, yamlContent.split('\n').length * 18)}px` : "400px"}
-                readOnly={true}
-              />
-            </div>
+            {expandedSections.configuration && (
+              <div className="collapsible-content">
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
+                  <button
+                    className="btn"
+                    onClick={() => setYamlExpanded(!yamlExpanded)}
+                    style={{
+                      border: '1px solid #374151',
+                      fontSize: '12px',
+                      padding: '6px 12px'
+                    }}
+                  >
+                    {yamlExpanded ? '⌃ Collapse' : '⌄ Expand'}
+                  </button>
+                </div>
+                <div style={{
+                  maxHeight: yamlExpanded ? 'none' : '400px',
+                  overflowY: yamlExpanded ? 'visible' : 'auto',
+                  marginTop: '8px'
+                }}>
+                  <YamlEditor
+                    value={yamlContent}
+                    onChange={() => {}} // No-op for read-only
+                    height={yamlExpanded ? `${Math.max(600, yamlContent.split('\n').length * 18)}px` : "400px"}
+                    readOnly={true}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        <div style={{ marginBottom: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <h3>Results Notes</h3>
-            {!isEditingNotes ? (
-              <div style={{ display: 'flex', gap: '8px' }}>
+        {/* Results Section - Collapsible */}
+        <div className="collapsible-section mb-24">
+          <div className="collapsible-header" onClick={() => !isEditingNotes && toggleSection('results')}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '14px', transition: 'transform 0.2s', transform: expandedSections.results ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                ▶
+              </span>
+              <h3 style={{ margin: 0, fontSize: '16px' }}>Results & Analysis</h3>
+            </div>
+            {!isEditingNotes && (
+              <div style={{ display: 'flex', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
                 <button
                   className="btn"
-                  style={{ fontSize: '12px', border: '1px solid #6366f1' }}
+                  style={{ fontSize: '12px', border: '1px solid #6366f1', padding: '6px 12px' }}
                   onClick={refreshResults}
                   disabled={refreshingResults}
                 >
-                  {refreshingResults ? 'Refreshing...' : '↻ Refresh Notes'}
+                  {refreshingResults ? 'Refreshing...' : '↻ Refresh'}
                 </button>
                 <button
                   className="btn"
-                  style={{ fontSize: '12px', border: '1px solid #06b6d4' }}
+                  style={{ fontSize: '12px', border: '1px solid #06b6d4', padding: '6px 12px' }}
                   onClick={() => setIsEditingNotes(true)}
                 >
                   {run.results_text ? 'Edit' : 'Add'}
                 </button>
               </div>
-            ) : (
-              <div style={{ display: 'flex', gap: '8px' }}>
+            )}
+            {isEditingNotes && (
+              <div style={{ display: 'flex', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
                 <button
                   className="btn"
-                  style={{ fontSize: '12px', border: '1px solid #10b981' }}
+                  style={{ fontSize: '12px', border: '1px solid #10b981', padding: '6px 12px' }}
                   onClick={saveNotes}
                   disabled={notesLoading}
                 >
@@ -828,7 +830,7 @@ export default function RunDetail() {
                 </button>
                 <button
                   className="btn"
-                  style={{ fontSize: '12px', border: '1px solid #6b7280' }}
+                  style={{ fontSize: '12px', border: '1px solid #6b7280', padding: '6px 12px' }}
                   onClick={cancelEditNotes}
                   disabled={notesLoading}
                 >
@@ -837,56 +839,54 @@ export default function RunDetail() {
               </div>
             )}
           </div>
-          
-          {isEditingNotes ? (
-            <textarea
-              value={notesText}
-              onChange={(e) => setNotesText(e.target.value)}
-              placeholder="Write your results notes here..."
-              style={{
-                width: '100%',
-                minHeight: '120px',
-                background: '#0b0f14',
-                border: '1px solid #374151',
-                borderRadius: '6px',
-                padding: '12px',
-                color: 'white',
-                fontFamily: 'monospace',
-                fontSize: '14px',
-                resize: 'vertical'
-              }}
-              disabled={notesLoading}
-            />
-          ) : (
-            <div
-              ref={notesContainerRef}
-              style={{
-                background: '#0b0f14',
-                border: '1px solid #374151',
-                borderRadius: '6px',
-                padding: '12px',
-                minHeight: '40px',
-                maxHeight: '400px',
-                overflowY: 'auto'
-              }}
-            >
-              {run.results_text ? (
-                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '14px' }}>
-                  {run.results_text}
-                </pre>
+          {expandedSections.results && (
+            <div className="collapsible-content">
+              <h4 style={{ fontSize: '14px', color: '#9ca3af', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Notes
+              </h4>
+              {isEditingNotes ? (
+                <textarea
+                  value={notesText}
+                  onChange={(e) => setNotesText(e.target.value)}
+                  placeholder="Write your results notes here..."
+                  className="code-block"
+                  style={{
+                    width: '100%',
+                    minHeight: '120px',
+                    resize: 'vertical',
+                    fontFamily: 'monospace',
+                    fontSize: '14px'
+                  }}
+                  disabled={notesLoading}
+                />
               ) : (
-                <p style={{ margin: 0, color: '#9ca3af', fontStyle: 'italic' }}>
-                  No results notes. Click &quot;Add&quot; to write notes.
-                </p>
+                <div
+                  ref={notesContainerRef}
+                  className="code-block"
+                  style={{
+                    minHeight: '40px',
+                    maxHeight: '400px',
+                    overflowY: 'auto'
+                  }}
+                >
+                  {run.results_text ? (
+                    <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '14px' }}>
+                      {run.results_text}
+                    </pre>
+                  ) : (
+                    <p style={{ margin: 0, color: '#6b7280', fontStyle: 'italic' }}>
+                      No results notes. Click &quot;Add&quot; to write notes.
+                    </p>
+                  )}
+                </div>
               )}
-            </div>
-          )}
-        </div>
 
-        {/* Plugin Information Section */}
-        {(runPluginExecutions.length > 0 || (experiment?.enabled_plugins && experiment.enabled_plugins.some(p => p.scope === 'run')) || (run?.enabled_plugins && run.enabled_plugins.length > 0)) && (
-          <div style={{ marginBottom: '24px' }}>
-            <h3 style={{ marginBottom: '16px' }}>🤖 AI Plugin Insights</h3>
+              {/* Plugin Information Section inside Results */}
+              {(runPluginExecutions.length > 0 || (experiment?.enabled_plugins && experiment.enabled_plugins.some(p => p.scope === 'run')) || (run?.enabled_plugins && run.enabled_plugins.length > 0)) && (
+                <div className="mt-16">
+                  <h4 style={{ fontSize: '14px', color: '#9ca3af', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    🤖 AI Plugin Insights
+                  </h4>
 
             {/* Combined Plugins Section */}
             {((experiment?.enabled_plugins && experiment.enabled_plugins.filter(p => p.scope === 'run').length > 0) || (run?.enabled_plugins && run.enabled_plugins.length > 0) || runPluginExecutions.length > 0) && (
@@ -1025,40 +1025,54 @@ export default function RunDetail() {
               </div>
             )}
 
-            {/* No plugins message */}
-            {runPluginExecutions.length === 0 && !run?.enabled_plugins?.length && !(experiment?.enabled_plugins && experiment.enabled_plugins.filter(p => p.scope === 'run').length > 0) && (
-              <div style={{
-                textAlign: 'center',
-                padding: '20px',
-                color: '#9ca3af',
-                backgroundColor: '#1f2937',
-                borderRadius: '8px',
-                border: '1px solid #374151'
-              }}>
-                <div style={{ fontSize: '24px', marginBottom: '8px' }}>🔌</div>
-                <div style={{ fontSize: '14px' }}>
-                  No plugins configured.
-                  <Link href="/plugins" style={{ color: '#60a5fa', textDecoration: 'none', marginLeft: '4px' }}>
-                    Browse plugins →
-                  </Link>
+                  {/* No plugins message */}
+                  {runPluginExecutions.length === 0 && !run?.enabled_plugins?.length && !(experiment?.enabled_plugins && experiment.enabled_plugins.filter(p => p.scope === 'run').length > 0) && (
+                    <div style={{
+                      textAlign: 'center',
+                      padding: '20px',
+                      color: '#6b7280',
+                      backgroundColor: '#1f2937',
+                      borderRadius: '8px',
+                      border: '1px solid #374151'
+                    }}>
+                      <div style={{ fontSize: '24px', marginBottom: '8px' }}>🔌</div>
+                      <div style={{ fontSize: '14px' }}>
+                        No plugins configured.
+                        <Link href="/plugins" style={{ color: '#60a5fa', textDecoration: 'none', marginLeft: '4px' }}>
+                          Browse plugins →
+                        </Link>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
+        </div>
 
+        {/* Logs Section - Collapsible */}
         {(run.status === 'running' || run.status === 'starting' || run.status === 'succeeded' || run.status === 'failed' || run.status === 'stopped' || run.status === 'killed' || logs) && (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <h3>Execution Logs</h3>
-              <div style={{ display: 'flex', gap: '8px' }}>
+          <div className="collapsible-section">
+            <div className="collapsible-header" onClick={() => toggleSection('logs')}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '14px', transition: 'transform 0.2s', transform: expandedSections.logs ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                  ▶
+                </span>
+                <h3 style={{ margin: 0, fontSize: '16px' }}>Execution Logs</h3>
+                {tensorboardAvailable && (
+                  <span className="badge badge-warning">
+                    TensorBoard Ready
+                  </span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
                 <button
                   className="btn"
                   onClick={loadLogs}
                   disabled={logsLoading}
-                  style={{ fontSize: '12px' }}
+                  style={{ fontSize: '12px', padding: '6px 12px' }}
                 >
-                  {logsLoading ? 'Loading...' : 'Refresh Logs'}
+                  {logsLoading ? 'Loading...' : '↻ Refresh'}
                 </button>
                 <a
                   href={tensorboardAvailable && tensorboardUrl ? tensorboardUrl : '#'}
@@ -1067,6 +1081,7 @@ export default function RunDetail() {
                   className="btn"
                   style={{
                     fontSize: '12px',
+                    padding: '6px 12px',
                     border: `1px solid ${tensorboardAvailable ? '#f59e0b' : '#6b7280'}`,
                     opacity: tensorboardAvailable ? 1 : 0.5,
                     cursor: tensorboardAvailable ? 'pointer' : 'not-allowed',
@@ -1075,50 +1090,50 @@ export default function RunDetail() {
                   title={tensorboardAvailable ? "Open TensorBoard" : "TensorBoard data not available"}
                   onClick={tensorboardAvailable ? undefined : (e) => e.preventDefault()}
                 >
-                  TensorBoard
+                  📊 TensorBoard
                 </a>
               </div>
             </div>
-            
-            <div
-              ref={logsContainerRef}
-              style={{
-                background: '#0b0f14',
-                border: '1px solid #374151',
-                borderRadius: '6px',
-                padding: '12px',
-                maxHeight: '400px',
-                overflowY: 'auto',
-                fontFamily: 'monospace',
-                fontSize: '12px',
-                whiteSpace: 'pre-wrap'
-              }}
-            >
-              {logs ? logs : (
-                <p style={{ color: '#9ca3af', margin: 0 }}>
-                  {(run.status === 'created' || run.status === 'starting')
-                    ? 'Logs will be available when execution starts'
-                    : 'Loading logs...'}
-                </p>
-              )}
-            </div>
 
-            <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'center' }}>
-              <button
-                className="btn"
-                onClick={toggleAutoScrollLogs}
-                style={{
-                  fontSize: '12px',
-                  border: `2px solid ${autoScrollLogs ? '#10b981' : '#6366f1'}`,
-                  background: autoScrollLogs ? '#10b981' : 'transparent',
-                  color: autoScrollLogs ? 'white' : 'inherit',
-                  fontWeight: autoScrollLogs ? 'bold' : 'normal'
-                }}
-                title={autoScrollLogs ? "Auto-scroll enabled (click to disable)" : "Enable auto-scroll to end"}
-              >
-                {autoScrollLogs ? '✓ Auto-scroll Active' : '↓ Scroll to End'}
-              </button>
-            </div>
+            {expandedSections.logs && (
+              <div className="collapsible-content">
+                <div
+                  ref={logsContainerRef}
+                  className="code-block"
+                  style={{
+                    maxHeight: '400px',
+                    overflowY: 'auto',
+                    whiteSpace: 'pre-wrap'
+                  }}
+                >
+                  {logs ? logs : (
+                    <p style={{ color: '#6b7280', margin: 0 }}>
+                      {(run.status === 'created' || run.status === 'starting')
+                        ? 'Logs will be available when execution starts'
+                        : 'Loading logs...'}
+                    </p>
+                  )}
+                </div>
+
+                <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'center' }}>
+                  <button
+                    className="btn"
+                    onClick={toggleAutoScrollLogs}
+                    style={{
+                      fontSize: '12px',
+                      padding: '8px 16px',
+                      border: `2px solid ${autoScrollLogs ? '#10b981' : '#6366f1'}`,
+                      background: autoScrollLogs ? '#10b981' : 'transparent',
+                      color: autoScrollLogs ? 'white' : 'inherit',
+                      fontWeight: autoScrollLogs ? 'bold' : 'normal'
+                    }}
+                    title={autoScrollLogs ? "Auto-scroll enabled (click to disable)" : "Enable auto-scroll to end"}
+                  >
+                    {autoScrollLogs ? '✓ Auto-scroll Active' : '↓ Scroll to End'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

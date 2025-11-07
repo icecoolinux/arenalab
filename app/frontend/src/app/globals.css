@@ -32,3 +32,206 @@ input[type=number] {
     transform: scale(1.02);
   }
 }
+
+/* Status Badge Utilities */
+.status-badge {
+  padding: 6px 12px;
+  border-radius: 6px;
+  fontSize: 14px;
+  font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-running { background: #059669; color: white; }
+.status-succeeded { background: #10b981; color: white; }
+.status-failed { background: #dc2626; color: white; }
+.status-stopped { background: #f59e0b; color: white; }
+.status-killed { background: #dc2626; color: white; }
+.status-pending { background: #6b7280; color: white; }
+.status-created { background: #3b82f6; color: white; }
+.status-starting { background: #059669; color: white; }
+
+/* Spacing Utilities */
+.mb-8 { margin-bottom: 8px; }
+.mb-16 { margin-bottom: 16px; }
+.mb-24 { margin-bottom: 24px; }
+.mb-32 { margin-bottom: 32px; }
+.mt-16 { margin-top: 16px; }
+.gap-8 { gap: 8px; }
+.gap-12 { gap: 12px; }
+.gap-16 { gap: 16px; }
+
+/* Section Utilities */
+.section {
+  background: #111827;
+  border: 1px solid #1f2937;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 16px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #374151;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+  color: #f3f4f6;
+}
+
+.section-subtitle {
+  font-size: 14px;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+
+/* Code Block */
+.code-block {
+  background: #0b0f14;
+  border: 1px solid #374151;
+  border-radius: 6px;
+  padding: 12px;
+  font-family: monospace;
+  fontSize: 12px;
+  overflow-x: auto;
+}
+
+/* Info Box */
+.info-box {
+  background: #1e3a5f;
+  border: 2px solid #3b82f6;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: start;
+  gap: 12px;
+}
+
+.warning-box {
+  background: #fef3c7;
+  border: 2px solid #f59e0b;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  color: #78350f;
+}
+
+.error-box {
+  background: #dc2626;
+  color: white;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+/* Action Button Group */
+.action-btn-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.icon-btn {
+  font-size: 18px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.icon-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Collapsible Section */
+.collapsible-section {
+  border: 1px solid #374151;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  background: #1f2937;
+}
+
+.collapsible-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s ease;
+}
+
+.collapsible-header:hover {
+  background: #374151;
+}
+
+.collapsible-content {
+  padding: 0 16px 16px 16px;
+  border-top: 1px solid #374151;
+}
+
+/* Sticky Header */
+.sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: #111827;
+  border-bottom: 1px solid #374151;
+  padding: 16px;
+  margin: -16px -16px 16px -16px;
+}
+
+/* Responsive Grid */
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 768px) {
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .action-btn-group {
+    width: 100%;
+  }
+
+  .icon-btn {
+    flex: 1;
+  }
+}
+
+/* Badge */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  gap: 4px;
+}
+
+.badge-info { background: #1e3a8a; color: #bfdbfe; }
+.badge-success { background: #064e3b; color: #d1fae5; }
+.badge-warning { background: #78350f; color: #fef3c7; }
+.badge-error { background: #7f1d1d; color: #fecaca; }
+.badge-neutral { background: #374151; color: #9ca3af; }
