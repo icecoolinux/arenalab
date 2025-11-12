@@ -262,6 +262,20 @@ class EnvironmentResponse(BaseModel):
 	file_format: str = Field(..., description="Compressed file format")
 	compressed_file_path: str = Field(..., description="Path to original compressed file")
 	git_commit_url: Optional[str] = Field(None, description="Git commit URL for environment source code")
-	
+
+	class Config:
+		populate_by_name = True
+
+class LLMUsageModel(BaseModel):
+	id: str = Field(..., alias="_id", description="MongoDB ObjectId")
+	provider: str = Field(..., description="LLM provider (openai, anthropic)")
+	model: str = Field(..., description="Model name")
+	prompt_tokens: int = Field(..., description="Number of prompt tokens")
+	completion_tokens: int = Field(..., description="Number of completion tokens")
+	total_tokens: int = Field(..., description="Total tokens used")
+	created_at: datetime = Field(..., description="Timestamp of the API call")
+	context: dict = Field(default_factory=dict, description="Additional context (experiment_id, run_id, plugin_name, etc.)")
+	usage_details: dict = Field(default_factory=dict, description="Provider-specific usage details")
+
 	class Config:
 		populate_by_name = True

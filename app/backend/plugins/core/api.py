@@ -835,6 +835,21 @@ class PluginAPI:
                     ]
                 )
 
+                # Log usage to database
+                from db import llm_usage
+                llm_usage.log_usage(
+                    provider="anthropic",
+                    model=response.model,
+                    prompt_tokens=response.usage.input_tokens,
+                    completion_tokens=response.usage.output_tokens,
+                    total_tokens=response.usage.input_tokens + response.usage.output_tokens,
+                    context={
+                        "plugin_name": self.context.plugin_name,
+                        "scope": self.context.scope,
+                        "target_id": self.context.target_id
+                    }
+                )
+
                 return response.content[0].text
 
             except ImportError:
@@ -851,11 +866,30 @@ class PluginAPI:
                 client = openai.OpenAI(api_key=openai_key)
 
                 response = client.chat.completions.create(
-                    model="gpt-4",
+                    model="gpt-5-mini",
                     messages=[
                         {"role": "user", "content": full_prompt}
-                    ],
-                    max_tokens=2048
+                    ]
+                )
+
+                # Log usage to database
+                from db import llm_usage
+                usage_details = {}
+                if hasattr(response.usage, 'completion_tokens_details') and response.usage.completion_tokens_details:
+                    usage_details["reasoning_tokens"] = getattr(response.usage.completion_tokens_details, 'reasoning_tokens', 0)
+
+                llm_usage.log_usage(
+                    provider="openai",
+                    model=response.model,
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    total_tokens=response.usage.total_tokens,
+                    context={
+                        "plugin_name": self.context.plugin_name,
+                        "scope": self.context.scope,
+                        "target_id": self.context.target_id
+                    },
+                    usage_details=usage_details
                 )
 
                 return response.choices[0].message.content

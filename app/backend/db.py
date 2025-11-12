@@ -24,6 +24,8 @@ def get_db():
 		_db.users.create_index([("email", ASCENDING)], unique=True)
 		_db.revisions.create_index([("experiment_id", ASCENDING)])
 		_db.environments.create_index([("name", ASCENDING)])
+		_db.llm_usage.create_index([("created_at", ASCENDING)])
+		_db.llm_usage.create_index([("provider", ASCENDING)])
 		
 	return _db
 
@@ -240,10 +242,10 @@ class EnvironmentsCollection(BaseCollection):
 
 class SettingsCollection(BaseCollection):
 	"""Settings collection operations"""
-	
+
 	def __init__(self):
 		super().__init__("settings")
-	
+
 	def get_global_settings(self) -> Dict[str, Any]:
 		settings = self.find_one({"_id": "global"})
 		if not settings:
@@ -255,15 +257,39 @@ class SettingsCollection(BaseCollection):
 			self.insert_one(default_settings)
 			return default_settings
 		return settings
-	
+
 	def update_global_settings(self, payload: Dict[str, Any]) -> bool:
 		# Use upsert to create if doesn't exist
 		result = self.collection.update_one(
-			{"_id": "global"}, 
-			{"$set": payload}, 
+			{"_id": "global"},
+			{"$set": payload},
 			upsert=True
 		)
 		return result.upserted_id is not None or result.modified_count > 0
+
+
+class LLMUsageCollection(BaseCollection):
+	"""LLM Usage tracking collection operations"""
+
+	def __init__(self):
+		super().__init__("llm_usage")
+
+	def log_usage(self, provider: str, model: str, prompt_tokens: int,
+				  completion_tokens: int, total_tokens: int,
+				  context: Dict[str, Any] = None,
+				  usage_details: Dict[str, Any] = None) -> str:
+		"""Log LLM API usage to database"""
+		usage_doc = {
+			"provider": provider,
+			"model": model,
+			"prompt_tokens": prompt_tokens,
+			"completion_tokens": completion_tokens,
+			"total_tokens": total_tokens,
+			"created_at": datetime.utcnow(),
+			"context": context or {},
+			"usage_details": usage_details or {}
+		}
+		return self.insert_one(usage_doc)
 
 
 # Collection instances for easy access
@@ -273,6 +299,7 @@ runs = RunsCollection()
 revisions = RevisionsCollection()
 environments = EnvironmentsCollection()
 settings = SettingsCollection()
+llm_usage = LLMUsageCollection()
 
 # Plugin collections will be added dynamically when plugin system initializes
 # This avoids circular imports while keeping the plugin system separate
