@@ -57,19 +57,19 @@ class PluginExecutionsCollection(BaseCollection):
 
 class PluginSettingsCollection(BaseCollection):
     """Collection for user plugin settings and preferences."""
-    
+
     def __init__(self):
         super().__init__("plugin_settings")
         # Create indexes
         self.collection.create_index([("user_id", ASCENDING)])
         self.collection.create_index([("plugin_name", ASCENDING)])
-    
+
     def get_user_plugin_settings(self, user_id: str, plugin_name: str) -> Dict[str, Any]:
         """Get plugin settings for a user."""
         doc = self.find_one({"user_id": user_id, "plugin_name": plugin_name})
         return doc.get("settings", {}) if doc else {}
-    
-    def update_user_plugin_settings(self, user_id: str, plugin_name: str, 
+
+    def update_user_plugin_settings(self, user_id: str, plugin_name: str,
                                   settings: Dict[str, Any]) -> bool:
         """Update plugin settings for a user."""
         result = self.collection.update_one(
@@ -83,15 +83,61 @@ class PluginSettingsCollection(BaseCollection):
             upsert=True
         )
         return result.upserted_id is not None or result.modified_count > 0
-    
+
     def get_enabled_plugins(self, user_id: str, scope: str = None) -> List[str]:
         """Get list of enabled plugins for a user."""
         query = {"user_id": user_id, "settings.enabled": True}
         if scope:
             query["scope"] = scope
-        
+
         docs = self.find_many(query)
         return [doc["plugin_name"] for doc in docs]
+
+
+class PluginLogsCollection(BaseCollection):
+    """Collection for plugin execution logs."""
+
+    def __init__(self):
+        super().__init__("plugin_logs")
+        # Create indexes
+        self.collection.create_index([("execution_id", ASCENDING)])
+        self.collection.create_index([("timestamp", ASCENDING)])
+        self.collection.create_index([("level", ASCENDING)])
+
+    def add_log(self, execution_id: str, level: str, message: str,
+                metadata: Dict[str, Any] = None) -> str:
+        """Add a log entry."""
+        log_entry = {
+            "execution_id": execution_id,
+            "level": level.upper(),
+            "message": message,
+            "metadata": metadata or {},
+            "timestamp": datetime.utcnow()
+        }
+        result = self.collection.insert_one(log_entry)
+        return str(result.inserted_id)
+
+    def get_logs(self, execution_id: str, level: str = None,
+                 limit: int = 100, skip: int = 0) -> List[Dict[str, Any]]:
+        """Get logs for a plugin execution."""
+        query = {"execution_id": execution_id}
+        if level:
+            query["level"] = level.upper()
+
+        cursor = self.collection.find(query).sort("timestamp", ASCENDING).skip(skip).limit(limit)
+        return list(cursor)
+
+    def get_logs_count(self, execution_id: str, level: str = None) -> int:
+        """Get count of logs for a plugin execution."""
+        query = {"execution_id": execution_id}
+        if level:
+            query["level"] = level.upper()
+        return self.collection.count_documents(query)
+
+    def clear_logs(self, execution_id: str) -> int:
+        """Clear logs for a plugin execution."""
+        result = self.collection.delete_many({"execution_id": execution_id})
+        return result.deleted_count
 
 
 def extend_existing_collections():
@@ -230,9 +276,27 @@ def get_run_plugins(run_id: str) -> List[Dict[str, Any]]:
 # Collection instances
 plugin_executions = PluginExecutionsCollection()
 plugin_settings = PluginSettingsCollection()
+plugin_logs = PluginLogsCollection()
 
 # Initialize database extensions
 extend_existing_collections()
+
+
+def add_plugin_log(execution_id: str, level: str, message: str,
+                   metadata: Dict[str, Any] = None) -> str:
+    """Add a log entry for a plugin execution."""
+    return plugin_logs.add_log(execution_id, level, message, metadata)
+
+
+def get_plugin_logs(execution_id: str, level: str = None,
+                    limit: int = 100, skip: int = 0) -> List[Dict[str, Any]]:
+    """Get logs for a plugin execution."""
+    return plugin_logs.get_logs(execution_id, level, limit, skip)
+
+
+def get_plugin_logs_count(execution_id: str, level: str = None) -> int:
+    """Get count of logs for a plugin execution."""
+    return plugin_logs.get_logs_count(execution_id, level)
 
 
 # Export database extension function for use in main db module
@@ -240,5 +304,6 @@ def get_plugin_database():
     """Get plugin-related database collections."""
     return {
         "plugin_executions": plugin_executions,
-        "plugin_settings": plugin_settings
+        "plugin_settings": plugin_settings,
+        "plugin_logs": plugin_logs
     }

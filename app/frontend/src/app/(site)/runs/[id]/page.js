@@ -7,6 +7,7 @@ import YamlEditor from '@/components/YamlEditor';
 import ContextTag from '@/components/ContextTag';
 import StarButton from '@/components/StarButton';
 import DeleteConfirmationDialog from '@/components/DeleteConfirmationDialog';
+import PluginDetailsDialog from '@/components/PluginDetailsDialog';
 import { useDeleteWithConfirmation } from '@/hooks/useDeleteWithConfirmation';
 
 export default function RunDetail() {
@@ -36,7 +37,7 @@ export default function RunDetail() {
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [autoScrollLogs, setAutoScrollLogs] = useState(false);
   const [showRestartDialog, setShowRestartDialog] = useState(false);
-  const [expandedPlugins, setExpandedPlugins] = useState({});
+  const [selectedPlugin, setSelectedPlugin] = useState(null);
   const [expandedSections, setExpandedSections] = useState({
     metadata: true,
     configuration: false,
@@ -60,7 +61,7 @@ export default function RunDetail() {
 
   useEffect(() => {
     let interval;
-    if (autoRefresh && (run?.status === 'running' || run?.status === 'starting')) {
+    if (autoRefresh && (run?.status === 'running' || run?.status === 'starting' || run?.status === 'stopping')) {
       interval = setInterval(() => {
         loadRunStatus();
         loadLogs();
@@ -166,7 +167,7 @@ export default function RunDetail() {
         }
       }
       
-      if (runData.status === 'running' || runData.status === 'starting' || runData.status === 'succeeded' || runData.status === 'failed' || runData.status === 'stopped' || runData.status === 'killed') {
+      if (runData.status === 'running' || runData.status === 'starting' || runData.status === 'stopping' || runData.status === 'succeeded' || runData.status === 'failed' || runData.status === 'stopped' || runData.status === 'killed') {
         loadLogs();
       }
 
@@ -397,6 +398,7 @@ export default function RunDetail() {
       case 'succeeded': return '#10b981';
       case 'failed': return '#dc2626';
       case 'stopped': return '#f59e0b';
+      case 'stopping': return '#f59e0b';
       case 'killed': return '#dc2626';
       case 'pending': return '#6b7280';
       case 'created': return '#3b82f6';  // Blue to indicate ready for execution
@@ -424,11 +426,12 @@ export default function RunDetail() {
     });
   }
 
-  function togglePlugin(pluginKey) {
-    setExpandedPlugins(prev => ({
-      ...prev,
-      [pluginKey]: !prev[pluginKey]
-    }));
+  function openPluginDialog(plugin, execution) {
+    setSelectedPlugin({ plugin, execution });
+  }
+
+  function closePluginDialog() {
+    setSelectedPlugin(null);
   }
 
   function toggleSection(sectionKey) {
@@ -487,7 +490,7 @@ export default function RunDetail() {
                   setRun({ ...run, is_favorite: newFavoriteState });
                 }}
               />
-              {(run.status === 'running' || run.status === 'starting') && (
+              {(run.status === 'running' || run.status === 'starting' || run.status === 'stopping') && (
                 <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: '#9ca3af' }}>
                   <input
                     type="checkbox"
@@ -511,17 +514,18 @@ export default function RunDetail() {
                 </button>
               )}
 
-              {(run.status === 'running' || run.status === 'starting') && (
+              {(run.status === 'running' || run.status === 'starting' || run.status === 'stopping') && (
                 <>
                   <button
                     className="btn icon-btn"
                     style={{ border: '1px solid #ef4444' }}
                     onClick={() => controlRun('stop')}
-                    title="Stop"
+                    title={run.status === 'stopping' ? 'Stopping (waiting for plugins)...' : 'Stop'}
+                    disabled={run.status === 'stopping'}
                   >
                     ◼
                   </button>
-                  {health && health.stuck && (
+                  {health && health.stuck && run.status !== 'stopping' && (
                     <button
                       className="btn icon-btn"
                       style={{ border: '2px solid #dc2626', background: '#dc2626', color: 'white' }}
@@ -628,6 +632,21 @@ export default function RunDetail() {
               <div style={{ fontSize: '14px', color: '#bfdbfe', lineHeight: '1.5' }}>
                 This run has been created with an immutable configuration but has not been executed yet.
                 Click the <strong>Execute button (▷)</strong> above to start the training process.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {run.status === 'stopping' && (
+          <div className="info-box" style={{ background: '#78350f', borderLeft: '4px solid #f59e0b' }}>
+            <div style={{ fontSize: '24px', lineHeight: '1' }}>⏳</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 'bold', marginBottom: '4px', fontSize: '16px', color: '#fcd34d' }}>
+                Run Stopping - Waiting for Plugins
+              </div>
+              <div style={{ fontSize: '14px', color: '#fde68a', lineHeight: '1.5' }}>
+                The run is shutting down gracefully. Active plugins are being stopped and given time to complete their work (up to 30 seconds).
+                The run will transition to <strong>stopped</strong> once all plugins have finished.
               </div>
             </div>
           </div>
@@ -917,107 +936,57 @@ export default function RunDetail() {
                       const enabledPlugin = allEnabledPlugins.find(p => p.name === pluginName);
                       const execution = executionMap[pluginName];
                       const pluginKey = `plugin-${pluginName}-${index}`;
-                      const isExpanded = expandedPlugins[pluginKey];
 
                       return (
-                        <div
+                        <button
                           key={pluginKey}
+                          onClick={() => openPluginDialog(enabledPlugin, execution)}
                           style={{
                             border: '1px solid #374151',
                             borderRadius: '6px',
                             backgroundColor: '#1f2937',
-                            overflow: 'hidden'
+                            padding: '12px',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                            width: '100%',
+                            transition: 'all 0.2s ease',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#374151';
+                            e.currentTarget.style.borderColor = '#60a5fa';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = '#1f2937';
+                            e.currentTarget.style.borderColor = '#374151';
                           }}
                         >
-                          <div
-                            onClick={() => togglePlugin(pluginKey)}
-                            style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              padding: '12px',
-                              cursor: 'pointer',
-                              userSelect: 'none'
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                              <span style={{ fontSize: '12px', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
-                                ▶
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                            <span style={{ fontSize: '20px' }}>
+                              {pluginName === 'auto_analyzer' && '🤖'}
+                              {pluginName === 'performance_monitor' && '📈'}
+                              {pluginName !== 'auto_analyzer' && pluginName !== 'performance_monitor' && '🔌'}
+                            </span>
+                            <span style={{ fontWeight: '500', fontSize: '15px', color: '#f1f5f9' }}>{pluginName}</span>
+                            {execution && (
+                              <span style={{
+                                fontSize: '12px',
+                                padding: '4px 10px',
+                                borderRadius: '12px',
+                                backgroundColor: execution.status === 'running' ? '#065f46' :
+                                               execution.status === 'completed' ? '#064e3b' : '#7f1d1d',
+                                color: execution.status === 'running' ? '#d1fae5' :
+                                      execution.status === 'completed' ? '#d1fae5' : '#fecaca',
+                                fontWeight: '500'
+                              }}>
+                                {execution.status === 'completed' ? '✓ completed' : execution.status}
                               </span>
-                              <span style={{ fontSize: '16px' }}>
-                                {pluginName === 'auto_analyzer' && '🤖'}
-                                {pluginName === 'performance_monitor' && '📈'}
-                              </span>
-                              <span style={{ fontWeight: '500' }}>{pluginName}</span>
-                              {enabledPlugin && (
-                                <span style={{
-                                  fontSize: '11px',
-                                  padding: '2px 6px',
-                                  borderRadius: '10px',
-                                  backgroundColor: '#1e3a8a',
-                                  color: '#bfdbfe'
-                                }}>
-                                  {enabledPlugin.source}
-                                </span>
-                              )}
-                              {execution && (
-                                <span style={{
-                                  fontSize: '11px',
-                                  padding: '2px 6px',
-                                  borderRadius: '10px',
-                                  backgroundColor: execution.status === 'running' ? '#065f46' :
-                                                 execution.status === 'completed' ? '#064e3b' : '#7f1d1d',
-                                  color: execution.status === 'running' ? '#d1fae5' :
-                                        execution.status === 'completed' ? '#d1fae5' : '#fecaca'
-                                }}>
-                                  {execution.status === 'completed' ? '✓ completed' : execution.status}
-                                </span>
-                              )}
-                            </div>
+                            )}
                           </div>
-
-                          {isExpanded && (
-                            <div style={{ padding: '0 12px 12px 12px' }}>
-                              {/* Show execution details if available */}
-                              {execution && (
-                                <div style={{ marginBottom: '12px' }}>
-                                  <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '4px' }}>
-                                    {execution.started_at && `Started: ${new Date(execution.started_at).toLocaleString()}`}
-                                  </div>
-                                  {execution.error_message && (
-                                    <div style={{
-                                      fontSize: '11px',
-                                      color: '#fca5a5',
-                                      backgroundColor: '#7f1d1d',
-                                      padding: '6px 8px',
-                                      borderRadius: '4px'
-                                    }}>
-                                      Error: {execution.error_message}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-
-                              {/* Show settings if available */}
-                              {enabledPlugin?.settings && Object.keys(enabledPlugin.settings).length > 0 && (
-                                <div style={{
-                                  padding: '8px',
-                                  backgroundColor: '#0b0f14',
-                                  borderRadius: '4px',
-                                  fontSize: '12px',
-                                  fontFamily: 'monospace'
-                                }}>
-                                  <div style={{ fontWeight: '600', marginBottom: '4px', color: '#9ca3af' }}>Settings:</div>
-                                  {Object.entries(enabledPlugin.settings).map(([key, value]) => (
-                                    <div key={key} style={{ color: '#d1d5db' }}>
-                                      <span style={{ color: '#9ca3af' }}>{key}:</span> {String(value)}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                          <span style={{ fontSize: '16px', color: '#9ca3af' }}>→</span>
+                        </button>
                       );
                     });
                   })()}
@@ -1247,6 +1216,14 @@ export default function RunDetail() {
         itemName={deleteHook.pendingDelete?.itemName}
         itemType="run"
         warnings={deleteHook.warnings}
+      />
+
+      {/* Plugin Details Dialog */}
+      <PluginDetailsDialog
+        isOpen={!!selectedPlugin}
+        onClose={closePluginDialog}
+        plugin={selectedPlugin?.plugin}
+        execution={selectedPlugin?.execution}
       />
 
       {/* Floating Scroll to Bottom Button */}

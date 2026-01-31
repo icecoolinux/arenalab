@@ -127,6 +127,54 @@ def get_run_logs(run_id: str, max_lines: int, run_dir_getter) -> List[str]:
         return []
 
 
+def wait_for_plugin_completion(plugin_executions: list, timeout: float = 30.0) -> bool:
+    """
+    Wait for plugin executions to complete with timeout.
+
+    Args:
+        plugin_executions: List of plugin execution IDs to wait for
+        timeout: Maximum time to wait in seconds (default 30s)
+
+    Returns:
+        True if all plugins completed, False if timeout occurred
+    """
+    import time
+
+    if not plugin_executions:
+        return True
+
+    start_time = time.time()
+    logger.info(f"Waiting for {len(plugin_executions)} plugin(s) to complete (timeout: {timeout}s)")
+
+    while time.time() - start_time < timeout:
+        # Check if all plugins have completed
+        from plugins import get_execution
+        all_completed = True
+
+        for exec_id in plugin_executions:
+            execution = get_execution(exec_id)
+            if execution:
+                # Check if it's a dict (from DB) or PluginExecution object
+                if isinstance(execution, dict):
+                    status = execution.get("status")
+                else:
+                    status = execution.status.value if hasattr(execution.status, 'value') else str(execution.status)
+
+                if status not in ["completed", "failed", "stopped"]:
+                    all_completed = False
+                    break
+
+        if all_completed:
+            logger.info(f"All plugins completed in {time.time() - start_time:.2f}s")
+            return True
+
+        # Wait a bit before checking again
+        time.sleep(0.5)
+
+    logger.warning(f"Plugin completion timeout after {timeout}s")
+    return False
+
+
 def stop_run(run_id: str, port_deallocator) -> bool:
     """Stop a running process gracefully with enhanced error handling and cleanup"""
     try:
@@ -138,7 +186,7 @@ def stop_run(run_id: str, port_deallocator) -> bool:
                 # Import here to avoid circular dependency
                 from .run_lifecycle import get_effective_run_status
                 current_status = get_effective_run_status(run_id)
-                if current_status in ["running", "pending"]:
+                if current_status in ["running", "pending", "stopping"]:
                     # This is an orphaned run - update database to reflect that process is no longer active
                     db = get_db()
                     db.runs.update_one(
@@ -153,18 +201,83 @@ def stop_run(run_id: str, port_deallocator) -> bool:
 
         logger.info(f"Stopping run {run_id} (PID: {proc.pid})")
 
-        # Verify process is still alive before attempting to stop it
+        # Step 1: Set status to "stopping" in database
+        try:
+            db = get_db()
+            db.runs.update_one(
+                {"_id": run_id},
+                {"$set": {"status": "stopping"}}
+            )
+            logger.info(f"Run {run_id} status set to 'stopping'")
+        except Exception as db_e:
+            logger.error(f"Failed to set stopping status for run {run_id}: {db_e}")
+
+        # Step 2: Stop all active plugins for this run
+        plugin_execution_ids = []
+        try:
+            from plugins import get_executions_for_target, stop_plugin
+
+            # Get all plugin executions for this run
+            executions = get_executions_for_target(run_id, scope="run")
+
+            # Filter to only running plugins
+            running_plugins = []
+            for execution in executions:
+                # Handle both dict (from DB) and PluginExecution object
+                if isinstance(execution, dict):
+                    status = execution.get("status")
+                    exec_id = execution.get("execution_id")
+                else:
+                    status = execution.status.value if hasattr(execution.status, 'value') else str(execution.status)
+                    exec_id = f"{execution.plugin_name}_{execution.target_id}_{int(execution.started_at.timestamp())}" if execution.started_at else None
+
+                if status == "running" and exec_id:
+                    running_plugins.append((exec_id, execution))
+
+            if running_plugins:
+                logger.info(f"Found {len(running_plugins)} active plugin(s) for run {run_id}")
+
+                # Signal all plugins to stop
+                for exec_id, execution in running_plugins:
+                    try:
+                        stop_plugin(exec_id)
+                        plugin_execution_ids.append(exec_id)
+                        plugin_name = execution.get("plugin_name") if isinstance(execution, dict) else execution.plugin_name
+                        logger.info(f"Signaled plugin '{plugin_name}' (execution: {exec_id}) to stop")
+                    except Exception as plugin_e:
+                        logger.error(f"Error stopping plugin execution {exec_id}: {plugin_e}")
+
+                # Wait for plugins to complete (with timeout)
+                if plugin_execution_ids:
+                    wait_for_plugin_completion(plugin_execution_ids, timeout=30.0)
+            else:
+                logger.info(f"No active plugins found for run {run_id}")
+
+        except Exception as plugin_e:
+            logger.error(f"Error handling plugins for run {run_id}: {plugin_e}")
+            # Continue with process termination even if plugin handling fails
+
+        # Step 3: Verify process is still alive before attempting to stop it
         try:
             if proc.poll() is not None:
                 logger.info(f"Process {run_id} already terminated with code {proc.returncode}")
                 # Process already dead, just cleanup
                 RUN_PROCS.pop(run_id, None)
                 RUN_STATUS.pop(run_id, None)
+                # Update to stopped since plugins are done and process is dead
+                try:
+                    db = get_db()
+                    db.runs.update_one(
+                        {"_id": run_id},
+                        {"$set": {"status": "stopped", "ended_at": datetime.now(timezone.utc)}}
+                    )
+                except Exception as db_e:
+                    logger.error(f"Failed to update final status for {run_id}: {db_e}")
                 return True
         except Exception as e:
             logger.warning(f"Error checking process status for {run_id}: {e}")
 
-        # Attempt graceful termination
+        # Step 4: Attempt graceful termination of mlagents-learn process
         termination_successful = False
         try:
             if os.name != 'nt':
@@ -258,6 +371,7 @@ def force_kill_run(run_id: str, port_deallocator) -> bool:
     """
     Force kill a run immediately without graceful shutdown.
     Use this for stuck processes that won't respond to normal stop.
+    This bypasses the "stopping" state and immediately kills everything.
     """
     try:
         proc = RUN_PROCS.get(run_id)
@@ -266,6 +380,26 @@ def force_kill_run(run_id: str, port_deallocator) -> bool:
             return False
 
         logger.warning(f"Force killing run {run_id} (PID: {proc.pid})")
+
+        # Stop all plugins immediately (don't wait)
+        try:
+            from plugins import get_executions_for_target, stop_plugin
+
+            executions = get_executions_for_target(run_id, scope="run")
+            for execution in executions:
+                if isinstance(execution, dict):
+                    exec_id = execution.get("execution_id")
+                else:
+                    exec_id = f"{execution.plugin_name}_{execution.target_id}_{int(execution.started_at.timestamp())}" if execution.started_at else None
+
+                if exec_id:
+                    try:
+                        stop_plugin(exec_id)
+                        logger.info(f"Signaled plugin {exec_id} to stop during force kill")
+                    except Exception as plugin_e:
+                        logger.error(f"Error stopping plugin {exec_id} during force kill: {plugin_e}")
+        except Exception as plugins_e:
+            logger.error(f"Error handling plugins during force kill of {run_id}: {plugins_e}")
 
         # Force kill entire process group
         try:

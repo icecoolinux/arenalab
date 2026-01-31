@@ -122,7 +122,6 @@ JWT_SECRET=put_something_random_and_long
 #ADMIN_PASSWORD=changeme
 MONGODB_URI=mongodb://localhost:27017
 MONGO_DB=mlagents_lab
-#OPENAI_API_KEY=...
 ```
 4. Restart the pod
 5. Open the Web HTTP Service on port 3000.

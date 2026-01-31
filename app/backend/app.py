@@ -1,4 +1,5 @@
 import os
+import logging
 from dotenv import load_dotenv
 from utils.file_tools import paths
 import httpx
@@ -11,6 +12,14 @@ if os.path.exists(env_path):
 else:
 	# Fallback to development env file
 	load_dotenv("../config/.env.development")
+
+# Configure logging
+log_level = os.getenv("LOG_LEVEL", "WARNING").upper()
+logging.basicConfig(
+	level=getattr(logging, log_level, logging.DEBUG),
+	format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+	datefmt="%Y-%m-%d %H:%M:%S"
+)
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -201,3 +210,35 @@ def on_start():
 		print(f"[bootstrap] Registered {len(registered_plugins)} plugins: {', '.join(registered_plugins)}")
 	except ImportError:
 		print("[bootstrap] Warning: Could not initialize plugins")
+
+	# Cleanup orphaned active runs (from backend restart while runs were executing)
+	try:
+		from db import get_db
+		from datetime import datetime, timezone
+		db = get_db()
+
+		# Find all runs in active states (running, starting, pending, stopping)
+		# These runs have no actual process after restart since RUN_PROCS is cleared
+		active_states = ["running", "starting", "pending", "stopping"]
+		orphaned_runs = list(db.runs.find({"status": {"$in": active_states}}))
+
+		if orphaned_runs:
+			print(f"[bootstrap] Found {len(orphaned_runs)} orphaned run(s) in active states")
+
+			for run in orphaned_runs:
+				run_id = run.get("_id")
+				old_status = run.get("status")
+				# Mark them as "stopped" since the backend was restarted and processes are gone
+				db.runs.update_one(
+					{"_id": run_id},
+					{"$set": {
+						"status": "stopped",
+						"ended_at": datetime.now(timezone.utc)
+					}}
+				)
+				print(f"[bootstrap] Marked orphaned run {run_id} (was '{old_status}') as 'stopped'")
+		else:
+			print("[bootstrap] No orphaned active runs found")
+
+	except Exception as e:
+		print(f"[bootstrap] Warning: Failed to cleanup orphaned active runs: {e}")

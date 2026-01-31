@@ -285,11 +285,23 @@ async def delete_run(run_id: str, confirmed: bool = Query(False), user=Depends(g
         )
 
     # Stop the run if it's active
-    if run.get("status") in ["running", "pending"]:
+    if run.get("status") in ["running", "pending", "starting"]:
         try:
             run_service.stop_run(run_id)
         except:
             pass  # Best effort
+
+    # Wait for stopping to complete
+    if run.get("status") == "stopping":
+        import time
+        max_wait = 35  # Wait up to 35 seconds (plugin timeout is 30s)
+        waited = 0
+        while waited < max_wait:
+            time.sleep(1)
+            waited += 1
+            updated_run = run_service.get_run(run_id)
+            if updated_run and updated_run.get("status") != "stopping":
+                break
 
     # Move to trash
     moved_paths = []

@@ -171,6 +171,7 @@ export default function PluginCard({
                             )}
                             min={spec.min}
                             max={spec.max}
+                            step="any"
                             style={{
                               fontSize: '13px',
                               padding: '8px',

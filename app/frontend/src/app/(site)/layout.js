@@ -28,6 +28,7 @@ function Nav({me}) {
       <Link href="/environments" className={isActive('/environments')}>Environments</Link>
       <Link href="/plugins" className={isActive('/plugins')}>🔌 Plugins</Link>
       {me ? <span style={{ marginLeft: 'auto', padding: '0.5rem' }}>{me.name}</span> : <span style={{ marginLeft: 'auto', padding: '0.5rem' }}>...</span>}
+      <Link href="/settings" className={isActive('/settings')}>⚙️ Settings</Link>
       <Link href="/logout" className={isActive('/logout')}>Logout</Link>
     </nav>
   )

@@ -119,6 +119,7 @@ class SimplePluginRunner:
             scope=scope,
             target_id=target_id,
             settings=settings,
+            execution_id=execution_id,
             metadata={}
         )
         execution.context = context
@@ -211,16 +212,28 @@ class SimplePluginRunner:
     
     def get_execution(self, execution_id: str) -> Optional[PluginExecution]:
         """Get execution info by ID from memory or database."""
+        from bson import ObjectId
+
         # First check in-memory executions (for active runs)
         if execution_id in self._executions:
             return self._executions[execution_id]
 
         # Fall back to database (for completed runs or after restart)
         try:
+            # Try to find by execution_id field first
             doc = plugin_executions.collection.find_one({"execution_id": execution_id})
             if doc:
-                # Return the raw document (it will be converted by the API endpoint)
                 return doc
+
+            # If not found, try to find by MongoDB _id (for frontend compatibility)
+            try:
+                doc = plugin_executions.collection.find_one({"_id": ObjectId(execution_id)})
+                if doc:
+                    return doc
+            except Exception:
+                # execution_id is not a valid ObjectId, that's fine
+                pass
+
         except Exception as e:
             logger.error(f"Error fetching execution from database: {e}")
 

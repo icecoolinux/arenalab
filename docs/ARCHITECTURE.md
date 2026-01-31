@@ -564,6 +564,66 @@ Background threads monitor process health with frequent startup checks and robus
 - All data persisted in `/workspace` volume
 - Stateless design for horizontal scaling
 
+### Container Startup Process
+
+The Docker container orchestrates multiple services using **supervisord** with initialization scripts.
+
+#### Startup Flow
+
+```
+Container Start
+     ↓
+startup.sh (entrypoint)
+  • Creates /workspace/{mongo,experiments,envs,config}
+  • Copies .env.example → secrets.env (first run only)
+  • Launches supervisord
+     ↓
+supervisord (app/supervisor/supervisord.conf)
+  • Starts 4 services in parallel with auto-restart
+     ↓
+┌────────────┬──────────────┬────────────┬────────────┐
+│  MongoDB   │ TensorBoard  │  Backend   │  Frontend  │
+│  (27017)   │   (6006)     │  (8000)    │  (3000)    │
+└────────────┴──────────────┴────────────┴────────────┘
+```
+
+#### Service Details
+
+**MongoDB**:
+- Data persisted in `/workspace/mongo`
+
+**TensorBoard**:
+- Watches experiments directory for event files
+
+**Backend** (`app/scripts/start-backend.sh`):
+- Detects mode via `BACKEND_MODE` environment variable
+- Creates admin user if `ADMIN_EMAIL`/`ADMIN_PASSWORD` set and no users exist
+
+**Frontend** (`app/scripts/start-frontend.sh`):
+- Auto-installs `node_modules` if missing (dev mode)
+- Mode detection:
+  - Explicit: Uses `FRONTEND_MODE` env variable
+  - Auto: Checks for `.next/BUILD_ID` file
+  - Fallback: Development mode
+
+#### Configuration
+
+**Workspace Directory** (first run creates):
+```
+/workspace/
+├── mongo/              # MongoDB data
+├── experiments/        # ML-Agents experiments
+├── envs/              # Unity environment binaries
+└── config/
+    └── secrets.env    # Credentials and configuration
+```
+
+**Admin User Bootstrap**:
+Admin user created automatically on first run if all conditions met:
+1. No users exist in database
+2. `ADMIN_EMAIL` defined in `secrets.env`
+3. `ADMIN_PASSWORD` defined in `secrets.env`
+
 ## Future Considerations
 
 - Microservices migration as complexity grows

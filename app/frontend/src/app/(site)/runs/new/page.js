@@ -133,6 +133,18 @@ function NewRunForm() {
       // Mark that we want to preserve CLI flags from the source run
       setPreserveCliFlags(true);
 
+      // Copy plugins from source run
+      if (runData.enabled_plugins && runData.enabled_plugins.length > 0) {
+        const pluginNames = runData.enabled_plugins.map(p => p.name);
+        const pluginSettingsMap = {};
+        runData.enabled_plugins.forEach(p => {
+          pluginSettingsMap[p.name] = p.settings || {};
+        });
+
+        setSelectedPlugins(pluginNames);
+        setPluginSettings(pluginSettingsMap);
+      }
+
       // Pre-populate the form with source run data
       setForm(prev => ({
         ...prev,

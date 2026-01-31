@@ -57,7 +57,6 @@ JWT_SECRET=put_something_random_and_long
 #ADMIN_PASSWORD=**changeme**
 MONGODB_URI=mongodb://localhost:27017
 MONGO_DB=mlagents_lab
-#OPENAI_API_KEY=...
 ```
 6. Re-start container
 ```bash

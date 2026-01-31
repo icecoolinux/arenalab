@@ -156,6 +156,24 @@ The workspace directory (configurable via `WORKSPACE` environment variable, defa
 
 ### Plugin System Architecture
 
+**Plugin Execution Identification:**
+- **`execution_id`**: Unique identifier for each plugin execution instance
+  - Generated when a plugin is started via `/plugins/execute`
+  - Used to track plugin lifecycle, logs, and status
+  - Primary key for querying execution-specific data
+  - Persists across application restarts in MongoDB `plugin_executions` collection
+- **`target_id`**: Identifier for the resource the plugin operates on (run ID, revision ID, or experiment ID)
+  - Represents the ML-Agents entity being processed
+  - Scope determines target type: `run` → run_id, `revision` → revision_id, `experiment` → experiment_id
+  - Multiple plugins can have the same target_id but different execution_ids
+  - Used for filtering executions by resource
+
+**Design Rationale:**
+- **execution_id** provides unique tracking for each plugin invocation
+- **target_id** links plugin work to ML-Agents resources for context
+- Separation allows multiple plugin executions on same target (e.g., re-runs, different plugins)
+- Consistent with API patterns: `/executions/{execution_id}` for execution-specific operations
+
 **Configuration Utilities (`utils/yaml_tools.py`):**
 - Central module for all YAML and ML-Agents configuration operations
 - Handles ML-Agents config structure (behaviors, hyperparameters, network_settings, etc.)

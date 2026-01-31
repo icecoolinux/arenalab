@@ -2,6 +2,13 @@
 Plugins router for managing plugin discovery, configuration, and execution.
 
 Provides endpoints for plugin discovery, execution management, and status monitoring.
+
+Plugin Execution Identification:
+    Each plugin execution is uniquely identified by an execution_id, which is:
+    - Generated when a plugin starts via /plugins/execute
+    - Used consistently across all execution-specific endpoints
+    - Persists in MongoDB for tracking across application restarts
+    - Independent of the target resource (run, revision, or experiment)
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -16,7 +23,7 @@ from plugins import (
     start_plugin, stop_plugin, get_execution,
     get_active_executions
 )
-from plugins.core.database import plugin_executions, plugin_settings
+from plugins.core.database import plugin_executions, plugin_settings, get_plugin_logs, get_plugin_logs_count
 
 router = APIRouter(prefix="/plugins", tags=["plugins"])
 
@@ -76,12 +83,18 @@ async def start_plugin_execution(
 ):
     """
     Start a plugin execution.
-    
+
+    Creates a new plugin execution with a unique execution_id that will be used
+    to track this specific execution throughout its lifecycle.
+
     Args:
-        request: Plugin execution parameters
-        
+        request: Plugin execution parameters (plugin_name, target_id, scope, settings)
+
     Returns:
-        Execution ID and status
+        execution_id: Unique identifier for this plugin execution
+        status: Current execution status
+        plugin_name: Name of the plugin being executed
+        target_id: ID of the resource being processed
     """
     # Validate plugin exists
     plugin_info = get_plugin(request.plugin_name)
@@ -159,17 +172,20 @@ async def list_plugin_executions(
 
 @router.get("/executions/{execution_id}")
 async def get_plugin_execution(
-    execution_id: str,
+    execution_id: str,  # Plugin execution is uniquely identified by execution_id
     user=Depends(get_current_user)
 ):
     """
     Get information about a specific plugin execution.
 
+    Each plugin execution is uniquely identified by its execution_id across
+    all API operations. This endpoint retrieves the complete execution state.
+
     Args:
-        execution_id: ID of the execution
+        execution_id: Unique ID of the plugin execution
 
     Returns:
-        Execution details and status
+        execution: Complete execution details including status, timestamps, and configuration
     """
     execution = get_execution(execution_id)
     if not execution:
@@ -184,19 +200,78 @@ async def get_plugin_execution(
         return {"execution": execution}
 
 
+@router.get("/executions/{execution_id}/logs")
+async def get_execution_logs(
+    execution_id: str,  # Plugin execution is uniquely identified by execution_id
+    level: Optional[str] = Query(None, description="Filter by log level (DEBUG, INFO, WARNING, ERROR)"),
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of logs to return"),
+    skip: int = Query(0, ge=0, description="Number of logs to skip (for pagination)"),
+    user=Depends(get_current_user)
+):
+    """
+    Get logs for a plugin execution.
+
+    Each plugin execution is uniquely identified by its execution_id, which is
+    generated when the plugin starts and persists throughout its lifecycle.
+
+    Args:
+        execution_id: Unique ID of the plugin execution
+        level: Optional log level filter
+        limit: Maximum number of logs to return (1-1000)
+        skip: Number of logs to skip for pagination
+
+    Returns:
+        List of log entries with metadata
+    """
+    # Verify execution exists
+    # Plugin executions are identified by execution_id across all operations
+    execution_doc = plugin_executions.collection.find_one(
+        {"execution_id": execution_id}
+    )
+
+    if not execution_doc:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Execution '{execution_id}' not found"
+        )
+
+    # Get logs for this specific plugin execution
+    logs = get_plugin_logs(execution_id, level, limit, skip)
+    total = get_plugin_logs_count(execution_id, level)
+
+    # Serialize logs
+    serialized_logs = [_serialize_execution(log) for log in logs]
+
+    return {
+        "execution_id": execution_id,
+        "plugin_name": execution_doc.get("plugin_name"),
+        "target_id": execution_doc.get("target_id"),
+        "logs": serialized_logs,
+        "total": total,
+        "limit": limit,
+        "skip": skip,
+        "level_filter": level
+    }
+
+
 @router.post("/executions/{execution_id}/stop")
 async def stop_plugin_execution(
-    execution_id: str,
+    execution_id: str,  # Plugin execution is uniquely identified by execution_id
     user=Depends(get_current_user)
 ):
     """
     Stop a running plugin execution.
 
+    Plugin executions are identified by their unique execution_id throughout
+    their lifecycle. This endpoint uses execution_id to stop the specific
+    plugin execution instance.
+
     Args:
-        execution_id: ID of the execution to stop
+        execution_id: Unique ID of the plugin execution to stop
 
     Returns:
-        Success status
+        status: Confirmation that execution was stopped
+        execution_id: The stopped execution's ID
     """
     success = stop_plugin(execution_id)
     if not success:

@@ -65,7 +65,7 @@ class RunService:
             
             # Validate status if provided
             if status:
-                valid_statuses = ["created", "pending", "running", "succeeded", "failed", "stopped"]
+                valid_statuses = ["created", "pending", "running", "starting", "stopping", "succeeded", "failed", "stopped", "killed", "error"]
                 if status not in valid_statuses:
                     raise RunError(f"Invalid status. Must be one of: {', '.join(valid_statuses)}")
             
@@ -209,7 +209,9 @@ class RunService:
             current_status = get_effective_run_status(run_id)
             if current_status == "running":
                 raise RunError(f"Run {run_id} is already running")
-            elif current_status not in ["created", "succeeded", "failed", "stopped"]:
+            elif current_status == "stopping":
+                raise RunError(f"Run {run_id} is currently stopping, please wait for it to complete")
+            elif current_status not in ["created", "succeeded", "failed", "stopped", "killed", "error"]:
                 raise RunError(f"Run {run_id} cannot be executed (status: {current_status})")
             
             # Execute the run
@@ -281,6 +283,8 @@ class RunService:
             
             # Check if run is actually running using centralized status
             current_status = get_effective_run_status(run_id)
+            if current_status == "stopping":
+                raise RunError(f"Run {run_id} is already stopping, please wait")
             if current_status not in ["running", "pending", "starting"]:
                 raise RunError(f"Run {run_id} is not currently active (status: {current_status})")
             
@@ -385,11 +389,15 @@ class RunService:
             if not run:
                 raise RunError(f"Run {run_id} not found")
             
+            # Determine if run is active (for log streaming, etc)
+            is_active = run.get("status") in ["running", "starting", "stopping", "pending"]
+
             # Return simple object that frontend can merge
             return {
                 "status": run.get("status"),  # Already has live status from get_run()
                 "started_at": run.get("started_at"),
-                "ended_at": run.get("ended_at")
+                "ended_at": run.get("ended_at"),
+                "is_active": is_active
             }
             
         except RunError:
@@ -562,13 +570,16 @@ class RunService:
             RunError: If run doesn't exist
         """
         try:
+            from config import TENSORBOARD_HOST, TENSORBOARD_PATH_PREFIX
+
             # Verify run exists
             run = self.get_run(run_id)
             if not run:
                 raise RunError(f"Run {run_id} not found")
 
             # Return simplified TensorBoard URL with regex input filtering
-            return f"/tb?darkMode=true&runFilter={run_id}#scalars&regexInput={run_id}"
+            tb_prefix = TENSORBOARD_PATH_PREFIX.rstrip('/')
+            return f"{TENSORBOARD_HOST}{tb_prefix}?darkMode=true&runFilter={run_id}#scalars&regexInput={run_id}"
 
         except RunError:
             raise

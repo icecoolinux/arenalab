@@ -35,5 +35,12 @@ MAX_FILENAME_LENGTH = 50  # Maximum length for sanitized filenames
 MAX_PAGE_LIMIT = 1000  # Maximum items per page in list endpoints
 
 # TensorBoard
-TENSORBOARD_HOST = os.getenv("TENSORBOARD_HOST", "http://localhost:6006")
-TENSORBOARD_PATH_PREFIX = os.getenv("TENSORBOARD_PATH_PREFIX", "/tb")  # Set to "" for no prefix
+if os.getenv("RUNNING_IN_DOCKER"):
+    TENSORBOARD_HOST_CALCULATED = "http://localhost:6006"
+    TENSORBOARD_PATH_PREFIX_CALCULATED = "/tb"
+else:
+    TENSORBOARD_HOST_CALCULATED = "http://localhost:6006"
+    TENSORBOARD_PATH_PREFIX_CALCULATED = ""
+TENSORBOARD_HOST = os.getenv("TENSORBOARD_HOST", TENSORBOARD_HOST_CALCULATED)
+TENSORBOARD_PATH_PREFIX = os.getenv("TENSORBOARD_PATH_PREFIX", TENSORBOARD_PATH_PREFIX_CALCULATED)
+

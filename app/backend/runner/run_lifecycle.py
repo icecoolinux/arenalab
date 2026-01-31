@@ -300,9 +300,14 @@ def execute_run(run_id: str, restart_mode: str = None) -> bool:
         if not run_doc:
             raise RunnerError(f"Run {run_id} not found")
 
-        # Check if run is already executing
+        # Check if run is already executing or stopping
         if run_id in RUN_PROCS:
             raise RunnerError(f"Run {run_id} is already executing")
+
+        # Check if run is in stopping state
+        current_status = get_effective_run_status(run_id)
+        if current_status == "stopping":
+            raise RunnerError(f"Run {run_id} is currently stopping, please wait for it to complete")
 
         logger.info(f"Executing run {run_id}")
 
@@ -575,6 +580,11 @@ def restart_run(run_id: str, mode: str = None) -> bool:
         if not run_doc:
             raise RunnerError(f"Run {run_id} not found")
 
+        # Check if run is in stopping state
+        current_status = get_effective_run_status(run_id)
+        if current_status == "stopping":
+            raise RunnerError(f"Run {run_id} is currently stopping, please wait for it to complete before restarting")
+
         # Stop run if it's currently executing
         if run_id in RUN_PROCS:
             logger.info(f"Stopping currently running process for restart {run_id}")
@@ -591,8 +601,8 @@ def restart_run(run_id: str, mode: str = None) -> bool:
                 stdout_log_path = ensure_workspace_path(run_doc.get("stdout_log_path", ""))
                 tb_logdir = ensure_workspace_path(run_doc.get("tb_logdir", ""))
 
-                # Record cleanup timestamp for stale metric detection
-                cleanup_timestamp = datetime.now(timezone.utc)
+                # Record cleanup timestamp for stale metric detection (local time to match TensorBoard)
+                cleanup_timestamp = datetime.now()
 
                 # Clear stdout log
                 if os.path.exists(stdout_log_path):
@@ -707,18 +717,28 @@ def get_effective_run_status(run_id: str) -> str:
         run_id: ID of the run
 
     Returns:
-        Status string: "created", "running", "succeeded", "failed", "stopped", "unknown"
+        Status string: "created", "running", "starting", "stopping", "succeeded", "failed", "stopped", "unknown"
     """
-    # Check if run is in active processes (overrides DB status)
+    # Check if run is in active processes (overrides DB status except for "stopping")
     if run_id in RUN_PROCS:
+        # First check DB for "stopping" status (takes precedence)
+        try:
+            db = get_db()
+            run_doc = db.runs.find_one({"_id": run_id})
+            if run_doc and run_doc.get("status") == "stopping":
+                return "stopping"
+        except Exception as e:
+            logger.warning(f"Error checking DB status for stopping run {run_id}: {e}")
+
+        # Otherwise return in-memory status
         return RUN_STATUS.get(run_id, "running")
 
-    # Check DB for run status (includes created, completed, etc.)
+    # Check DB for run status (includes created, completed, stopping, etc.)
     try:
         db = get_db()
         run_doc = db.runs.find_one({"_id": run_id})
         if run_doc:
-            # Return actual DB status (created, succeeded, failed, stopped, etc.)
+            # Return actual DB status (created, succeeded, failed, stopped, stopping, etc.)
             return run_doc.get("status", "unknown")
     except Exception as e:
         logger.warning(f"Error checking DB status for run {run_id}: {e}")

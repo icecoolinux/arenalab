@@ -12,7 +12,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    WORKSPACE=/workspace
+    WORKSPACE=/workspace \
+    RUNNING_IN_DOCKER=1
 
 # System packages and Node.js 22.x
 RUN apt-get update && apt-get install -y --no-install-recommends \

@@ -48,6 +48,7 @@ input[type=number] {
 .status-succeeded { background: #10b981; color: white; }
 .status-failed { background: #dc2626; color: white; }
 .status-stopped { background: #f59e0b; color: white; }
+.status-stopping { background: #f59e0b; color: white; }
 .status-killed { background: #dc2626; color: white; }
 .status-pending { background: #6b7280; color: white; }
 .status-created { background: #3b82f6; color: white; }
