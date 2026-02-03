@@ -190,6 +190,8 @@ export const deleteRun = (runId, confirmed = false) =>
   del(`/api/runs/${runId}`, { query: { confirmed } });
 export const updateRunNotes = (runId, notesText) =>
   put(`/api/runs/${runId}/results`, null, { query: { results_text: notesText } });
+export const updateRunName = (runId, name) =>
+  put(`/api/runs/${runId}/name`, null, { query: { name } });
 export const toggleRunFavorite = (runId) => put(`/api/runs/${runId}/favorite`);
 export const getRunLogs = (runId) => get(`/api/runs/${runId}/logs`);
 export const checkTensorboardStatus = (runId) => get(`/api/runs/${runId}/tensorboard/status`);

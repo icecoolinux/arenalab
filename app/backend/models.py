@@ -79,6 +79,7 @@ class RunModel(BaseModel):
 	experiment_id: str = Field(..., description="Experiment ID")
 	parent_revision_id: Optional[str] = Field(None, description="Parent revision ID")
 	parent_run_id: Optional[str] = Field(None, description="Parent run ID")
+	name: str = Field(default="", max_length=100, description="Human-readable run name")
 	created_at: datetime
 	started_at: Optional[datetime] = Field(None, description="Run start timestamp")
 	ended_at: Optional[datetime] = Field(None, description="Run end timestamp")
@@ -100,6 +101,7 @@ class RunBody(BaseModel):
 	experiment_id: str = Field(..., description="Experiment ID")
 	parent_revision_id: Optional[str] = Field(None, description="Parent revision ID")
 	parent_run_id: Optional[str] = Field(None, description="Parent run ID")
+	name: str = Field(default="", max_length=100, description="Human-readable run name")
 	yaml: str = Field(..., min_length=1, description="YAML configuration content")
 	cli_flags: dict = Field(default={}, description="CLI flags for ML-Agents")
 	description: str = Field(..., max_length=500, description="Run description")
@@ -234,6 +236,7 @@ class RunResponse(BaseModel):
 	experiment_id: str = Field(..., description="Experiment ID")
 	parent_revision_id: Optional[str] = Field(None, description="Parent revision ID")
 	parent_run_id: Optional[str] = Field(None, description="Parent run ID")
+	name: str = Field(default="", max_length=100, description="Human-readable run name")
 	created_at: datetime
 	started_at: Optional[datetime] = Field(None, description="Run start timestamp")
 	ended_at: Optional[datetime] = Field(None, description="Run end timestamp")

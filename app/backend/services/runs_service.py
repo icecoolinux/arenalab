@@ -153,6 +153,7 @@ class RunService:
                         cli_flags=run_data.cli_flags,
                         description=run_data.description,
                         results_text=run_data.results_text,
+                        name=run_data.name,
                         parent_run_id=run_data.parent_run_id,
                         parent_revision_id=run_data.parent_revision_id,
                         enabled_plugins=run_data.enabled_plugins
@@ -166,6 +167,7 @@ class RunService:
                         cli_flags=run_data.cli_flags,
                         description=run_data.description,
                         results_text=run_data.results_text,
+                        name=run_data.name,
                         parent_run_id=run_data.parent_run_id,
                         parent_revision_id=run_data.parent_revision_id,
                         enabled_plugins=run_data.enabled_plugins
@@ -526,13 +528,13 @@ class RunService:
     def toggle_run_favorite(self, run_id: str) -> Dict[str, Any]:
         """
         Toggle the favorite status of a run.
-        
+
         Args:
             run_id: ID of run to toggle favorite status
-            
+
         Returns:
             Updated run document with new favorite status
-            
+
         Raises:
             RunError: If run doesn't exist or toggle fails
         """
@@ -541,20 +543,59 @@ class RunService:
             run = self.get_run(run_id)
             if not run:
                 raise RunError(f"Run {run_id} not found")
-            
+
             # Toggle favorite status using database method
             success = self.runs_db.toggle_favorite(run_id)
             if not success:
                 raise RunError("Failed to toggle run favorite status")
-            
+
             # Return updated run
             updated_run = self.get_run(run_id)
             return updated_run
-            
+
         except RunError:
             raise
         except Exception as e:
             raise RunError(f"Failed to toggle run favorite: {str(e)}") from e
+
+    def update_run_name(self, run_id: str, name: str) -> Dict[str, Any]:
+        """
+        Update the human-readable name for a run.
+
+        Args:
+            run_id: ID of run to update
+            name: New name for the run (max 100 characters)
+
+        Returns:
+            Updated run document
+
+        Raises:
+            RunError: If run doesn't exist or update fails
+        """
+        try:
+            # Verify run exists
+            run = self.get_run(run_id)
+            if not run:
+                raise RunError(f"Run {run_id} not found")
+
+            # Update name
+            updates = {
+                "name": name,
+                "updated_at": datetime.utcnow()
+            }
+
+            success = self.runs_db.update_one({"_id": run_id}, updates)
+            if not success:
+                raise RunError("Failed to update run name")
+
+            # Return updated run
+            updated_run = self.get_run(run_id)
+            return updated_run
+
+        except RunError:
+            raise
+        except Exception as e:
+            raise RunError(f"Failed to update run name: {str(e)}") from e
 
     def get_tensorboard_url(self, run_id: str) -> Optional[str]:
         """

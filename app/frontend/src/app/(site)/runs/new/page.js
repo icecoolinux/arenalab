@@ -19,6 +19,7 @@ function NewRunForm() {
   const [form, setForm] = useState({
     experiment_id: '',
     revision_id: revisionId || '',
+    name: '',
     yaml: '',
     cli_flags: '{}',
     description: '',
@@ -150,6 +151,7 @@ function NewRunForm() {
         ...prev,
         experiment_id: runData.experiment_id,
         revision_id: runData.revision_id,
+        name: runData.name || '',
         yaml: yamlContent || '# ML-Agents YAML Configuration\n',
         cli_flags: JSON.stringify(runData.cli_flags || {}, null, 2),
         description: `Based on run ${runData._id.slice(-8)}`,
@@ -330,9 +332,9 @@ function NewRunForm() {
           </div>
 
           {selectedRevision && (
-            <div style={{ 
-              background: '#374151', 
-              padding: '12px', 
+            <div style={{
+              background: '#374151',
+              padding: '12px',
               borderRadius: '6px',
               marginBottom: '16px',
               fontSize: '12px'
@@ -346,6 +348,23 @@ function NewRunForm() {
               )}
             </div>
           )}
+
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
+              Run Name
+            </label>
+            <input
+              type="text"
+              className="input"
+              value={form.name}
+              onChange={e => setForm({...form, name: e.target.value})}
+              placeholder="e.g., Baseline Test, LR 0.001 Experiment"
+              maxLength={100}
+            />
+            <small style={{ color: '#9ca3af' }}>
+              Optional human-readable name for this run (max 100 characters)
+            </small>
+          </div>
 
           <div style={{ marginBottom: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>

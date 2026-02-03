@@ -177,6 +177,7 @@ def create_run(
     cli_flags: dict,
     description: str = "",
     results_text: str = "",
+    name: str = "",
     parent_run_id: Optional[str] = None,
     parent_revision_id: Optional[str] = None,
     enabled_plugins: List[dict] = None
@@ -191,6 +192,7 @@ def create_run(
         cli_flags: CLI flags for mlagents-learn (time_scale, no_graphics, num_envs, etc.)
         description: Run description
         results_text: Run results notes
+        name: Human-readable run name (for display only)
         parent_run_id: Optional parent run ID
         parent_revision_id: Optional parent revision ID
         enabled_plugins: Optional list of enabled plugins for this run
@@ -251,6 +253,7 @@ def create_run(
                 "experiment_id": str(experiment_id),
                 "parent_revision_id": parent_revision_id or "",
                 "parent_run_id": parent_run_id or "",
+                "name": name,
                 "status": "created",  # Not executed yet
                 "yaml_path": to_relative_path(yaml_path),
                 "yaml_snapshot": yaml_text,  # Immutable snapshot
@@ -661,6 +664,7 @@ def launch_run(
     cli_flags: dict,
     description: str = "",
     results_text: str = "",
+    name: str = "",
     parent_run_id: Optional[str] = None,
     parent_revision_id: Optional[str] = None,
     enabled_plugins: List[dict] = None
@@ -675,6 +679,7 @@ def launch_run(
         cli_flags: CLI flags for mlagents-learn
         description: Run description
         results_text: Run results notes
+        name: Human-readable run name (for display only)
         parent_run_id: Optional parent run ID
         parent_revision_id: Optional parent revision ID
         enabled_plugins: Optional list of enabled plugins for this run
@@ -694,6 +699,7 @@ def launch_run(
             cli_flags=cli_flags,
             description=description,
             results_text=results_text,
+            name=name,
             parent_run_id=parent_run_id,
             parent_revision_id=parent_revision_id,
             enabled_plugins=enabled_plugins

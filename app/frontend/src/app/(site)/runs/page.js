@@ -254,6 +254,7 @@ export default function Runs() {
                 <tr>
                   <th style={{ width: '40px' }}></th>
                   <th>ID</th>
+                  <th>Name</th>
                   <th>Experiment</th>
                   <th>Revision</th>
                   <th>Status</th>
@@ -265,7 +266,7 @@ export default function Runs() {
               <tbody>
                 {runs.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', color: '#9ca3af' }}>
+                    <td colSpan={9} style={{ textAlign: 'center', color: '#9ca3af' }}>
                       No runs found
                     </td>
                   </tr>
@@ -273,14 +274,14 @@ export default function Runs() {
                   runs.map(run => (
                     <tr key={run._id}>
                       <td style={{ textAlign: 'center' }}>
-                        <StarButton 
+                        <StarButton
                           entityType="run"
                           entityId={run._id}
                           isFavorite={run.is_favorite || false}
                           size="small"
                           onToggle={(newFavoriteState, updatedEntity) => {
                             // Update the run in the local state
-                            setRuns(runs.map(r => 
+                            setRuns(runs.map(r =>
                               r._id === run._id ? { ...r, is_favorite: newFavoriteState } : r
                             ));
                           }}
@@ -290,6 +291,13 @@ export default function Runs() {
                         <Link href={`/runs/${run._id}`} style={{ fontFamily: 'monospace' }}>
                           {run._id.slice(-8)}
                         </Link>
+                      </td>
+                      <td style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {run.name ? (
+                          <span title={run.name}>{run.name}</span>
+                        ) : (
+                          <span style={{ color: '#6b7280', fontStyle: 'italic' }}>—</span>
+                        )}
                       </td>
                       <td>
                         <Link href={`/experiments/${run.experiment_id}`}>

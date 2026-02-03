@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { get, post, del, put, getWorkspaceFile, checkRunDependencies, deleteRun as deleteRunApi } from "@/api/api-client";
+import { get, post, del, put, getWorkspaceFile, checkRunDependencies, deleteRun as deleteRunApi, updateRunName } from "@/api/api-client";
 import Link from 'next/link';
 import YamlEditor from '@/components/YamlEditor';
 import ContextTag from '@/components/ContextTag';
@@ -38,6 +38,9 @@ export default function RunDetail() {
   const [autoScrollLogs, setAutoScrollLogs] = useState(false);
   const [showRestartDialog, setShowRestartDialog] = useState(false);
   const [selectedPlugin, setSelectedPlugin] = useState(null);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameText, setNameText] = useState('');
+  const [nameLoading, setNameLoading] = useState(false);
   const [expandedSections, setExpandedSections] = useState({
     metadata: true,
     configuration: false,
@@ -157,6 +160,7 @@ export default function RunDetail() {
       setExperiment(expData);
       setRevision(revData);
       setNotesText(runData.results_text || '');
+      setNameText(runData.name || '');
 
       if (runData.yaml_path) {
         try {
@@ -303,6 +307,27 @@ export default function RunDetail() {
   function cancelEditNotes() {
     setNotesText(run?.results_text || '');
     setIsEditingNotes(false);
+  }
+
+  async function saveName() {
+    try {
+      setNameLoading(true);
+      setError('');
+
+      const updatedRun = await updateRunName(params.id, nameText);
+
+      setRun(updatedRun);
+      setIsEditingName(false);
+    } catch (e) {
+      setError(`Error saving name: ${e.message}`);
+    } finally {
+      setNameLoading(false);
+    }
+  }
+
+  function cancelEditName() {
+    setNameText(run?.name || '');
+    setIsEditingName(false);
   }
 
   async function refreshResults() {
@@ -475,9 +500,65 @@ export default function RunDetail() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
               <ContextTag type="run" label="Run" id={run._id.slice(-8)} />
-              <h1 style={{ margin: '0', fontFamily: 'monospace', fontSize: '20px' }}>
-                {run._id.slice(-8)}
-              </h1>
+              {isEditingName ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="text"
+                    value={nameText}
+                    onChange={e => setNameText(e.target.value)}
+                    placeholder="Enter run name..."
+                    maxLength={100}
+                    className="input"
+                    style={{ width: '200px', fontSize: '16px', padding: '6px 12px' }}
+                    disabled={nameLoading}
+                    autoFocus
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') saveName();
+                      if (e.key === 'Escape') cancelEditName();
+                    }}
+                  />
+                  <button
+                    className="btn"
+                    onClick={saveName}
+                    disabled={nameLoading}
+                    style={{ fontSize: '12px', padding: '6px 12px', border: '1px solid #10b981' }}
+                  >
+                    {nameLoading ? '...' : '✓'}
+                  </button>
+                  <button
+                    className="btn"
+                    onClick={cancelEditName}
+                    disabled={nameLoading}
+                    style={{ fontSize: '12px', padding: '6px 12px', border: '1px solid #6b7280' }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h1 style={{ margin: '0', fontSize: '20px' }}>
+                    {run.name || <span style={{ fontFamily: 'monospace' }}>{run._id.slice(-8)}</span>}
+                  </h1>
+                  {run.name && (
+                    <span style={{ color: '#6b7280', fontSize: '14px', fontFamily: 'monospace' }}>
+                      ({run._id.slice(-8)})
+                    </span>
+                  )}
+                  <button
+                    className="btn"
+                    onClick={() => setIsEditingName(true)}
+                    style={{
+                      fontSize: '12px',
+                      padding: '4px 8px',
+                      border: '1px solid #374151',
+                      opacity: 0.7
+                    }}
+                    title={run.name ? 'Edit name' : 'Add name'}
+                  >
+                    ✎
+                  </button>
+                </div>
+              )}
               <span className={`status-badge status-${run.status || 'pending'}`}>
                 {run.status || 'unknown'}
               </span>
@@ -674,6 +755,12 @@ export default function RunDetail() {
                       <tr>
                         <td style={{ padding: '8px 0', fontWeight: '500', color: '#9ca3af' }}>Run ID:</td>
                         <td style={{ padding: '8px 0', fontFamily: 'monospace', fontSize: '13px' }}>{run._id}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ padding: '8px 0', fontWeight: '500', color: '#9ca3af' }}>Name:</td>
+                        <td style={{ padding: '8px 0' }}>
+                          {run.name || <span style={{ color: '#6b7280', fontStyle: 'italic' }}>Not set</span>}
+                        </td>
                       </tr>
                       <tr>
                         <td style={{ padding: '8px 0', fontWeight: '500', color: '#9ca3af' }}>Experiment:</td>

@@ -153,6 +153,15 @@ async def update_run_results(run_id: str, results_text: str, user=Depends(get_cu
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@router.put("/{run_id}/name")
+async def update_run_name(run_id: str, name: str = Query(..., max_length=100), user=Depends(get_current_user)):
+    """Update the human-readable name for a run."""
+    try:
+        return run_service.update_run_name(run_id, name)
+    except RunError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @router.put("/{run_id}/favorite")
 async def toggle_run_favorite(run_id: str, user=Depends(get_current_user)):
     """Toggle the favorite status of a run."""
